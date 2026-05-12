@@ -64,7 +64,7 @@ export default function PortfolioEditorPanel({
 
   useEffect(() => {
     setDraft(portfolioDraftFromPortfolio(portfolio));
-  }, [portfolio?.id]);
+  }, [portfolio]);
 
   const normalizedAllocations = useMemo(() => normalizedAllocationsFromDraft(draft), [draft]);
   const allocationTotal = useMemo(() => calculateAllocationTotal(normalizedAllocations), [normalizedAllocations]);

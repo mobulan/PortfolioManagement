@@ -213,6 +213,8 @@ Action log:
 - 2026-05-12 Ran `node scripts\portfolio-smoke-test.mjs`, `node scripts\portfolio-transaction-smoke-test.mjs`, and `node scripts\portfolio-import-smoke-test.mjs`; all exited 0.
 - 2026-05-12 Ran static token/conflict-marker checks across the new portfolio components and helpers; passed.
 - 2026-05-12 Ran `git diff --check`; passed with only CRLF normalization warnings.
+- 2026-05-12 After activating the conda `fund` toolchain, installed dependencies with `npm ci`, ran `npm run lint` successfully with warnings only, and ran `npm run build` successfully.
+- 2026-05-12 Completed remote setup: local `main` now tracks `origin/main` at `https://github.com/mobulan/PortfolioManagement.git`; `upstream` remains `https://github.com/hzm0321/real-time-fund.git`.
 
 ### Agent P: Dashboard Risk And Trend Panel
 
