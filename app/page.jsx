@@ -198,6 +198,7 @@ export default function HomePage() {
     portfolioSnapshots, setPortfolioSnapshots,
     portfolioBacktests, setPortfolioBacktests,
     portfolioSettings, setPortfolioSettings,
+    portfolioSchemaVersion, setPortfolioSchemaVersion,
     initCollapsed, initRefreshMs,
     initHoldings, initGroupHoldings,
     initPendingTrades, initTransactions,
@@ -7010,6 +7011,7 @@ export default function HomePage() {
           {currentTab === 'portfolio' ? (
             <PortfolioWorkspace
               funds={funds}
+              legacyHoldings={holdings}
               portfolios={portfolios}
               setPortfolios={setPortfolios}
               portfolioHoldings={portfolioHoldings}
@@ -7024,6 +7026,8 @@ export default function HomePage() {
               setPortfolioBacktests={setPortfolioBacktests}
               portfolioSettings={portfolioSettings}
               setPortfolioSettings={setPortfolioSettings}
+              portfolioSchemaVersion={portfolioSchemaVersion}
+              setPortfolioSchemaVersion={setPortfolioSchemaVersion}
             />
           ) : scopedFunds.length === 0 &&
           !(currentTab === SUMMARY_TAB_ID && showPortfolioSummaryTab) ? (
@@ -7461,6 +7465,7 @@ export default function HomePage() {
         <div className="mobile-main-tab-panel mobile-main-tab-panel--portfolio">
           <PortfolioWorkspace
             funds={funds}
+            legacyHoldings={holdings}
             portfolios={portfolios}
             setPortfolios={setPortfolios}
             portfolioHoldings={portfolioHoldings}
@@ -7475,6 +7480,8 @@ export default function HomePage() {
             setPortfolioBacktests={setPortfolioBacktests}
             portfolioSettings={portfolioSettings}
             setPortfolioSettings={setPortfolioSettings}
+            portfolioSchemaVersion={portfolioSchemaVersion}
+            setPortfolioSchemaVersion={setPortfolioSchemaVersion}
           />
         </div>
       )}

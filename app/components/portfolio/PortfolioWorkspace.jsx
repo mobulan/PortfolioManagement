@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Plus, RefreshCw, Save, Upload, WalletCards } from 'lucide-react';
+import { Plus, Save, WalletCards } from 'lucide-react';
 import {
   ASSET_CLASSES,
   createDefaultPortfolio,
@@ -13,8 +13,15 @@ import {
   applyPortfolioTransaction,
   createPortfolioSnapshot,
   exportPortfolioData,
-  importPortfolioData,
+  analyzePortfolioImport,
+  previewLegacyHoldingsMigration,
 } from '@/app/lib/portfolio';
+import PortfolioBacktestPanel from './PortfolioBacktestPanel';
+import PortfolioDetailTabs from './PortfolioDetailTabs';
+import PortfolioEditorPanel from './PortfolioEditorPanel';
+import PortfolioHistoryImportPanel from './PortfolioHistoryImportPanel';
+import PortfolioMigrationPanel from './PortfolioMigrationPanel';
+import PortfolioTransactionsPanel from './PortfolioTransactionsPanel';
 
 const money = (value) => Number(value || 0).toLocaleString('zh-CN', {
   minimumFractionDigits: 2,
@@ -25,6 +32,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export default function PortfolioWorkspace({
   funds = [],
+  legacyHoldings = {},
   portfolios = [],
   setPortfolios,
   portfolioHoldings = [],
@@ -39,6 +47,8 @@ export default function PortfolioWorkspace({
   setPortfolioBacktests,
   portfolioSettings = {},
   setPortfolioSettings,
+  portfolioSchemaVersion = 1,
+  setPortfolioSchemaVersion,
 }) {
   const [selectedPortfolioId, setSelectedPortfolioId] = useState(portfolios[0]?.id || '');
   const [holdingDraft, setHoldingDraft] = useState({
@@ -62,6 +72,8 @@ export default function PortfolioWorkspace({
   });
   const [cashflowAmount, setCashflowAmount] = useState('');
   const [importText, setImportText] = useState('');
+  const [activeDetailTab, setActiveDetailTab] = useState('overview');
+  const [importAnalysis, setImportAnalysis] = useState(null);
 
   const selectedPortfolio = useMemo(
     () => portfolios.find((row) => row.id === selectedPortfolioId) || portfolios[0] || null,
@@ -83,6 +95,40 @@ export default function PortfolioWorkspace({
   const selectedHoldings = useMemo(
     () => portfolioHoldings.filter((holding) => holding.portfolioId === selectedPortfolio?.id && !holding.archived),
     [portfolioHoldings, selectedPortfolio?.id],
+  );
+  const selectedSnapshots = useMemo(
+    () => portfolioSnapshots.filter((snapshot) => snapshot.portfolioId === selectedPortfolio?.id),
+    [portfolioSnapshots, selectedPortfolio?.id],
+  );
+  const allocationTotal = useMemo(
+    () => (selectedPortfolio?.targetAllocations || []).reduce((sum, row) => sum + Number(row.targetRatio || 0), 0),
+    [selectedPortfolio],
+  );
+  const validationErrors = useMemo(() => {
+    const errors = [];
+    if (!selectedPortfolio) errors.push('请先创建或选择一个组合');
+    if (selectedPortfolio && Math.abs(allocationTotal - 1) > 0.0001) errors.push('目标比例合计需要等于 100%');
+    if (transactionDraft.holdingId && !portfolioHoldings.some((holding) => holding.id === transactionDraft.holdingId)) {
+      errors.push('当前交易选择的持仓不存在');
+    }
+    return errors;
+  }, [allocationTotal, portfolioHoldings, selectedPortfolio, transactionDraft.holdingId]);
+  const detailTabs = useMemo(() => ([
+    { id: 'overview', label: '总览' },
+    { id: 'holdings', label: '持仓', count: selectedHoldings.length },
+    { id: 'transactions', label: '交易', count: portfolioTransactions.filter((tx) => tx.portfolioId === selectedPortfolio?.id).length },
+    { id: 'rebalance', label: '再平衡' },
+    { id: 'history', label: '历史', count: selectedSnapshots.length },
+    { id: 'backtest', label: '回测' },
+  ]), [portfolioTransactions, selectedHoldings.length, selectedPortfolio?.id, selectedSnapshots.length]);
+  const legacyMigrationPreview = useMemo(
+    () => previewLegacyHoldingsMigration({
+      funds,
+      holdings: legacyHoldings,
+      existingPortfolioHoldings: portfolioHoldings,
+      portfolioId: selectedPortfolio?.id,
+    }),
+    [funds, legacyHoldings, portfolioHoldings, selectedPortfolio?.id],
   );
 
   const ensureDefaultPortfolio = () => {
@@ -181,20 +227,46 @@ export default function PortfolioWorkspace({
       portfolioSnapshots,
       portfolioBacktests,
       portfolioSettings,
+      portfolioSchemaVersion,
     });
     setImportText(text);
   };
 
-  const importJson = () => {
-    const parsed = importPortfolioData(JSON.parse(importText || '{}'));
-    setPortfolios(parsed.portfolios);
-    setPortfolioHoldings(parsed.portfolioHoldings);
-    setPortfolioTransactions(parsed.portfolioTransactions);
-    setPortfolioPrincipalRecords(parsed.portfolioPrincipalRecords);
-    setPortfolioSnapshots(parsed.portfolioSnapshots);
-    setPortfolioBacktests(parsed.portfolioBacktests);
-    setPortfolioSettings(parsed.portfolioSettings);
-    setSelectedPortfolioId(parsed.portfolios[0]?.id || '');
+  const analyzeImport = () => {
+    setImportAnalysis(analyzePortfolioImport(importText));
+  };
+
+  const applyAnalyzedImport = () => {
+    if (!importAnalysis?.normalized) return;
+    const parsed = importAnalysis.normalized;
+    if (!parsed.portfolios?.length) return;
+    setPortfolios(parsed.portfolios || []);
+    setPortfolioHoldings(parsed.portfolioHoldings || []);
+    setPortfolioTransactions(parsed.portfolioTransactions || []);
+    setPortfolioPrincipalRecords(parsed.portfolioPrincipalRecords || []);
+    setPortfolioSnapshots(parsed.portfolioSnapshots || []);
+    setPortfolioBacktests(parsed.portfolioBacktests || []);
+    setPortfolioSettings(parsed.portfolioSettings || {});
+    setPortfolioSchemaVersion?.(parsed.portfolioSchemaVersion || 1);
+    setSelectedPortfolioId(parsed.portfolios?.[0]?.id || '');
+  };
+
+  const runLegacyMigration = () => {
+    if (!selectedPortfolio || !legacyMigrationPreview.holdings?.length) return;
+    setPortfolioHoldings((prev) => [...prev, ...legacyMigrationPreview.holdings]);
+  };
+
+  const savePortfolio = (nextPortfolio) => {
+    setPortfolios((prev) => prev.map((row) => (row.id === nextPortfolio.id ? nextPortfolio : row)));
+  };
+
+  const archivePortfolio = (_portfolioId, archivedPortfolio) => {
+    savePortfolio(archivedPortfolio);
+  };
+
+  const createPortfolioFromEditor = (nextPortfolio) => {
+    setPortfolios((prev) => [...prev, nextPortfolio]);
+    setSelectedPortfolioId(nextPortfolio.id);
   };
 
   if (!portfolios.length) {
@@ -238,8 +310,17 @@ export default function PortfolioWorkspace({
         <Metric label="今日预估" value={`¥${money(dashboard.dailyEstimatedProfit)}`} tone={dashboard.dailyEstimatedProfit >= 0 ? 'up' : 'down'} />
       </div>
 
+      <PortfolioDetailTabs
+        value={activeDetailTab}
+        onChange={setActiveDetailTab}
+        tabs={detailTabs}
+        allocationTotal={allocationTotal}
+        errors={validationErrors}
+      />
+
       <div className="portfolio-layout">
         <div className="portfolio-main">
+          {activeDetailTab === 'overview' && (
           <Panel title="组合概览">
             {selectedSummary && (
               <div className="portfolio-summary-grid">
@@ -262,7 +343,9 @@ export default function PortfolioWorkspace({
               ))}
             </div>
           </Panel>
+          )}
 
+          {activeDetailTab === 'holdings' && (
           <Panel title="持仓">
             <div className="portfolio-table-wrap">
               <table className="portfolio-table">
@@ -292,7 +375,18 @@ export default function PortfolioWorkspace({
               </table>
             </div>
           </Panel>
+          )}
 
+          {activeDetailTab === 'transactions' && (
+            <PortfolioTransactionsPanel
+              portfolioId={selectedPortfolio?.id}
+              holdings={portfolioHoldings}
+              transactions={portfolioTransactions}
+              principalRecords={portfolioPrincipalRecords}
+            />
+          )}
+
+          {activeDetailTab === 'rebalance' && (
           <Panel title="再平衡">
             <div className="portfolio-rebalance-list">
               {(rebalancePlan?.items || []).map((item) => (
@@ -311,9 +405,45 @@ export default function PortfolioWorkspace({
               </span>
             </div>
           </Panel>
+          )}
+
+          {activeDetailTab === 'history' && (
+            <PortfolioHistoryImportPanel
+              snapshots={selectedSnapshots}
+              importText={importText}
+              onImportTextChange={(next) => {
+                setImportText(next);
+                setImportAnalysis(null);
+              }}
+              onAnalyze={analyzeImport}
+              analysis={importAnalysis}
+              onApplyImport={applyAnalyzedImport}
+              onRecordSnapshot={recordSnapshot}
+            />
+          )}
+
+          {activeDetailTab === 'backtest' && (
+            <PortfolioBacktestPanel
+              portfolioId={selectedPortfolio?.id}
+              portfolioBacktests={portfolioBacktests}
+              setPortfolioBacktests={setPortfolioBacktests}
+            />
+          )}
         </div>
 
         <aside className="portfolio-side">
+          {activeDetailTab === 'overview' && (
+            <PortfolioEditorPanel
+              portfolio={selectedPortfolio}
+              onSavePortfolio={savePortfolio}
+              onArchivePortfolio={archivePortfolio}
+              onCreatePortfolio={createPortfolioFromEditor}
+            />
+          )}
+
+          {activeDetailTab === 'holdings' && (
+          <>
+          <PortfolioMigrationPanel preview={legacyMigrationPreview} onRunMigration={runLegacyMigration} />
           <Panel title="新增持仓">
             <div className="portfolio-form">
               <select className="select" value={holdingDraft.instrumentType} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, instrumentType: e.target.value }))}>
@@ -332,7 +462,10 @@ export default function PortfolioWorkspace({
               <button type="button" className="button" onClick={addHolding}><Plus size={16} />添加持仓</button>
             </div>
           </Panel>
+          </>
+          )}
 
+          {activeDetailTab === 'transactions' && (
           <Panel title="记录交易">
             <div className="portfolio-form">
               <select className="select" value={transactionDraft.holdingId} onChange={(e) => setTransactionDraft((prev) => ({ ...prev, holdingId: e.target.value }))}>
@@ -355,16 +488,16 @@ export default function PortfolioWorkspace({
               <button type="button" className="button" onClick={recordTransaction}><Save size={16} />保存交易</button>
             </div>
           </Panel>
+          )}
 
-          <Panel title="快照与导入导出">
-            <div className="portfolio-form">
-              <button type="button" className="button secondary" onClick={recordSnapshot}><RefreshCw size={16} />记录今日快照</button>
-              <button type="button" className="button secondary" onClick={exportJson}><Upload size={16} />生成 JSON</button>
-              <textarea className="portfolio-textarea" value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="组合 JSON 导入/导出内容" />
-              <button type="button" className="button secondary" onClick={importJson}>导入 JSON</button>
-              <span className="muted">已记录快照 {portfolioSnapshots.filter((row) => row.portfolioId === selectedPortfolio?.id).length} 条</span>
-            </div>
-          </Panel>
+          {activeDetailTab === 'history' && (
+            <Panel title="导出备份">
+              <div className="portfolio-form">
+                <button type="button" className="button secondary" onClick={exportJson}>生成 JSON</button>
+                <span className="muted">生成后会填入左侧文本框，可复制保存或重新导入。</span>
+              </div>
+            </Panel>
+          )}
         </aside>
       </div>
     </section>

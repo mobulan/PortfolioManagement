@@ -8,6 +8,16 @@ export const ASSET_CLASSES = [
   { id: 'other', name: '其他', color: '#8b5cf6' },
 ];
 
+export const PORTFOLIO_TYPES = ['permanent', 'all_weather', 'custom'];
+
+export const PORTFOLIO_TEMPLATE_OPTIONS = [
+  { id: 'permanent', name: '永久组合', description: '股票、债券、黄金、现金各 25%' },
+  { id: 'all_weather', name: '全天候模板', description: '股票 30%、债券 40%、黄金 15%、现金 15%' },
+  { id: 'custom', name: '自定义组合', description: '默认股票 60%、债券 30%、现金 10%' },
+];
+
+export const ALLOCATION_TOTAL_TOLERANCE = 0.0001;
+
 export const PORTFOLIO_STORAGE_KEYS = {
   portfolios: 'portfolios',
   portfolioHoldings: 'portfolioHoldings',
@@ -45,6 +55,10 @@ export function getAssetClassName(assetClassId) {
   return ASSET_CLASSES.find((row) => row.id === assetClassId)?.name || '其他';
 }
 
+export function getPortfolioTemplate(type = 'permanent') {
+  return PORTFOLIO_TEMPLATE_OPTIONS.find((row) => row.id === type) || PORTFOLIO_TEMPLATE_OPTIONS[0];
+}
+
 export function createDefaultAllocations(type = 'permanent') {
   if (type === 'all_weather') {
     return [
@@ -69,6 +83,52 @@ export function createDefaultAllocations(type = 'permanent') {
   ];
 }
 
+export function calculateAllocationTotal(allocations = []) {
+  return (Array.isArray(allocations) ? allocations : [])
+    .reduce((sum, row) => sum + clampRatio(row?.targetRatio), 0);
+}
+
+export function validateTargetAllocations(allocations = [], options = {}) {
+  const rows = Array.isArray(allocations) ? allocations.map(normalizeAllocation) : [];
+  const errors = [];
+  const warnings = [];
+  const seenAssetClasses = new Set();
+  const total = calculateAllocationTotal(rows);
+  const requireTotal = options.requireTotal !== false;
+
+  if (!rows.length) {
+    errors.push({ code: 'allocation_empty', message: '请至少设置一个目标资产类别' });
+  }
+
+  rows.forEach((row, index) => {
+    if (!row.assetClassId) {
+      errors.push({ code: `allocation_${index}_missing_asset_class`, message: '目标比例需要选择资产类别' });
+    }
+    if (row.targetRatio <= 0) {
+      errors.push({ code: `allocation_${index}_zero_ratio`, message: `${row.assetClassName || '资产'} 目标比例必须大于 0` });
+    }
+    if (seenAssetClasses.has(row.assetClassId)) {
+      warnings.push({ code: `allocation_${index}_duplicate_asset_class`, message: `${row.assetClassName} 出现多次，保存前建议合并` });
+    }
+    seenAssetClasses.add(row.assetClassId);
+  });
+
+  if (requireTotal && Math.abs(total - 1) > ALLOCATION_TOTAL_TOLERANCE) {
+    errors.push({
+      code: 'allocation_total_not_100',
+      message: total > 1 ? '目标比例合计超过 100%' : '目标比例合计未满 100%',
+    });
+  }
+
+  return {
+    total,
+    delta: total - 1,
+    isBalanced: Math.abs(total - 1) <= ALLOCATION_TOTAL_TOLERANCE,
+    errors,
+    warnings,
+  };
+}
+
 export function normalizeAllocation(row = {}) {
   const assetClassId = toStringValue(row.assetClassId, 'other');
   return {
@@ -80,7 +140,7 @@ export function normalizeAllocation(row = {}) {
 }
 
 export function normalizePortfolio(input = {}) {
-  const type = ['permanent', 'all_weather', 'custom'].includes(input.type) ? input.type : 'custom';
+  const type = PORTFOLIO_TYPES.includes(input.type) ? input.type : 'custom';
   const allocations = Array.isArray(input.targetAllocations) && input.targetAllocations.length
     ? input.targetAllocations.map(normalizeAllocation).filter((row) => row.targetRatio > 0)
     : createDefaultAllocations(type);

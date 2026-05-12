@@ -21,6 +21,7 @@ import {
   createPortfolioSnapshot,
 } from '../app/lib/portfolio/snapshot.js';
 import {
+  analyzePortfolioImport,
   exportPortfolioData,
   importPortfolioData,
 } from '../app/lib/portfolio/importExport.js';
@@ -28,6 +29,9 @@ import {
   calculateRiskMetrics,
   calculateCorrelation,
 } from '../app/lib/portfolio/backtest.js';
+import {
+  previewLegacyHoldingsMigration,
+} from '../app/lib/portfolio/migrations.js';
 
 const nearly = (actual, expected, delta = 0.01) => {
   assert.ok(Math.abs(actual - expected) <= delta, `${actual} not within ${delta} of ${expected}`);
@@ -383,6 +387,48 @@ test('JSON import filters orphan records and tolerates malformed payload fields'
   assert.equal(emptyImport.portfolioHoldings.length, 0);
 });
 
+test('import analysis reports valid and dropped counts without applying import', () => {
+  const analysis = analyzePortfolioImport({
+    portfolios: [portfolio, null],
+    portfolioHoldings: [
+      holdings[0],
+      { id: 'orphan_holding', portfolioId: 'missing_portfolio', assetClassId: 'equity', share: 10 },
+    ],
+    portfolioTransactions: [
+      { id: 'valid_tx', portfolioId: portfolio.id, holdingId: 'h_equity_a', type: 'buy', amount: 10 },
+      { id: 'orphan_tx', portfolioId: portfolio.id, holdingId: 'missing_holding', type: 'buy', amount: 10 },
+    ],
+    portfolioPrincipalRecords: [
+      { id: 'valid_principal', portfolioId: portfolio.id, transactionId: 'valid_tx', amount: 10 },
+      { id: 'orphan_principal', portfolioId: portfolio.id, transactionId: 'orphan_tx', amount: 10 },
+    ],
+    portfolioSnapshots: [
+      { id: 'valid_snapshot', portfolioId: portfolio.id },
+      { id: 'orphan_snapshot', portfolioId: 'missing_portfolio' },
+    ],
+    portfolioBacktests: [{ id: 'valid_backtest' }, null],
+  });
+
+  assert.equal(analysis.valid, false);
+  assert.equal(analysis.counts.portfolios.valid, 1);
+  assert.equal(analysis.counts.portfolios.dropped, 1);
+  assert.equal(analysis.counts.portfolioHoldings.valid, 1);
+  assert.equal(analysis.counts.portfolioHoldings.dropped, 1);
+  assert.equal(analysis.counts.portfolioTransactions.valid, 1);
+  assert.equal(analysis.counts.portfolioTransactions.dropped, 1);
+  assert.equal(analysis.counts.portfolioPrincipalRecords.valid, 1);
+  assert.equal(analysis.counts.portfolioPrincipalRecords.dropped, 1);
+  assert.equal(analysis.counts.portfolioSnapshots.valid, 1);
+  assert.equal(analysis.counts.portfolioSnapshots.dropped, 1);
+  assert.equal(analysis.counts.portfolioBacktests.valid, 1);
+  assert.equal(analysis.counts.portfolioBacktests.dropped, 1);
+  assert.equal(analysis.errors.length > 0, true);
+
+  const malformed = analyzePortfolioImport('{bad json');
+  assert.equal(malformed.valid, false);
+  assert.equal(malformed.errors.length, 1);
+});
+
 test('invalid holding input normalizes to safe numeric defaults', () => {
   const invalidHolding = normalizePortfolioHolding({
     instrumentType: 'unsupported',
@@ -404,6 +450,44 @@ test('invalid holding input normalizes to safe numeric defaults', () => {
   nearly(summary.dailyEstimatedProfit, 0);
 });
 
+test('legacy holdings migration preview skips duplicate portfolio fund codes', () => {
+  const sourceHoldings = {
+    '000001': { share: 100, cost: 1 },
+    '000002': { share: 50, cost: 2 },
+    '': { share: 10, cost: 1 },
+  };
+  const existingPortfolioHoldings = [
+    normalizePortfolioHolding({
+      portfolioId: portfolio.id,
+      assetClassId: 'equity',
+      instrumentType: 'fund',
+      fundCode: '000001',
+      fundName: 'Already Migrated',
+      share: 1,
+      costAmount: 1,
+    }),
+  ];
+  const beforeExisting = JSON.stringify(existingPortfolioHoldings);
+
+  const preview = previewLegacyHoldingsMigration({
+    funds: [
+      { code: '000001', name: 'Equity Fund A', dwjz: 1.1, gsz: 1.2 },
+      { code: '000002', name: 'Equity Fund B', dwjz: 1.9, gsz: 2 },
+    ],
+    holdings: sourceHoldings,
+    existingPortfolioHoldings,
+    portfolioId: portfolio.id,
+  });
+
+  assert.equal(preview.migratableCount, 1);
+  assert.equal(preview.skippedCount, 2);
+  assert.equal(preview.holdings.length, 1);
+  assert.equal(preview.holdings[0].fundCode, '000002');
+  nearly(preview.holdings[0].share, 50);
+  nearly(preview.holdings[0].costAmount, 100);
+  assert.equal(JSON.stringify(existingPortfolioHoldings), beforeExisting);
+});
+
 test('backtest metrics and correlation remain finite for representative series', () => {
   const risk = calculateRiskMetrics([
     { date: '2026-05-10', value: 100 },
@@ -418,6 +502,22 @@ test('backtest metrics and correlation remain finite for representative series',
   const corr = calculateCorrelation([0.01, 0.02, -0.01], [0.02, 0.04, -0.02]);
   nearly(corr, 1, 0.0001);
   assert.equal(calculateCorrelation([0.01], [0.02]), 0);
+});
+
+test('backtest metrics stay finite for empty and single-point series', () => {
+  const empty = calculateRiskMetrics([]);
+  assert.equal(empty.sampleSize, 0);
+  assert.equal(empty.annualizedReturn, 0);
+  assert.equal(empty.volatility, 0);
+  assert.equal(empty.sharpe, 0);
+  assert.equal(empty.maxDrawdown, 0);
+
+  const single = calculateRiskMetrics([{ date: '2026-05-12', value: 100 }]);
+  assert.equal(single.sampleSize, 0);
+  assert.equal(single.annualizedReturn, 0);
+  assert.equal(single.volatility, 0);
+  assert.equal(single.sharpe, 0);
+  assert.equal(single.maxDrawdown, 0);
 });
 
 console.log('portfolio smoke tests passed');

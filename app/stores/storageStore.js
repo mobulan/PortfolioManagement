@@ -470,6 +470,14 @@ export const useStorageStore = create((set, get) => ({
     get().setItem('portfolioSettings', JSON.stringify(next));
   },
 
+  setPortfolioSchemaVersion: (nextPortfolioSchemaVersion) => {
+    const next = Number(typeof nextPortfolioSchemaVersion === 'function'
+      ? nextPortfolioSchemaVersion(get().portfolioSchemaVersion)
+      : nextPortfolioSchemaVersion) || 1;
+    set({ portfolioSchemaVersion: next });
+    get().setItem('portfolioSchemaVersion', JSON.stringify(next));
+  },
+
   /**
    * 核心写入方法：同步更新 localStorage 和 Store 状态，并触发同步
    * @param {string} key 
