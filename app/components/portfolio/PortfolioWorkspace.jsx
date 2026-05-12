@@ -12,10 +12,12 @@ import {
   calculateRebalancePlan,
   calculateSmartCashPlan,
   applyPortfolioTransaction,
+  createPortfolioTransactionBaseline,
   createPortfolioSnapshot,
   exportPortfolioData,
   analyzePortfolioImport,
   previewLegacyHoldingsMigration,
+  rebuildPortfolioAfterTransactionDelete,
 } from '@/app/lib/portfolio';
 import { fetchFundData, searchFunds } from '@/app/api/fund';
 import PortfolioBacktestPanel from './PortfolioBacktestPanel';
@@ -125,6 +127,8 @@ export default function PortfolioWorkspace({
     () => portfolioSnapshots.filter((snapshot) => snapshot.portfolioId === selectedPortfolio?.id),
     [portfolioSnapshots, selectedPortfolio?.id],
   );
+  const transactionBaselines = portfolioSettings?.transactionBaselines || {};
+  const selectedTransactionBaseline = selectedPortfolio?.id ? transactionBaselines[selectedPortfolio.id] : null;
   const allocationTotal = useMemo(
     () => (selectedPortfolio?.targetAllocations || []).reduce((sum, row) => sum + Number(row.targetRatio || 0), 0),
     [selectedPortfolio],
@@ -287,6 +291,19 @@ export default function PortfolioWorkspace({
   const recordTransaction = () => {
     if (!selectedPortfolio || !transactionDraft.holdingId) return;
     const holding = portfolioHoldings.find((row) => row.id === transactionDraft.holdingId);
+    if (!selectedTransactionBaseline) {
+      const baseline = createPortfolioTransactionBaseline({
+        portfolioId: selectedPortfolio.id,
+        holdings: selectedHoldings,
+      });
+      setPortfolioSettings((prev = {}) => ({
+        ...prev,
+        transactionBaselines: {
+          ...(prev.transactionBaselines || {}),
+          [selectedPortfolio.id]: baseline,
+        },
+      }));
+    }
     const result = applyPortfolioTransaction({
       holdings: portfolioHoldings,
       principalRecords: portfolioPrincipalRecords,
@@ -306,6 +323,27 @@ export default function PortfolioWorkspace({
     setPortfolioTransactions((prev) => [...prev, result.transaction]);
     setPortfolioPrincipalRecords(result.principalRecords);
     setTransactionDraft({ type: 'buy', holdingId: '', amount: '', share: '', price: '', fee: '', date: today() });
+  };
+
+  const applyLedgerRebuild = ({ transactionId = '' } = {}) => {
+    if (!selectedPortfolio?.id || !selectedTransactionBaseline) return;
+    const next = rebuildPortfolioAfterTransactionDelete({
+      portfolioId: selectedPortfolio.id,
+      baseline: selectedTransactionBaseline,
+      holdings: portfolioHoldings,
+      transactions: portfolioTransactions,
+      principalRecords: portfolioPrincipalRecords,
+      transactionId,
+    });
+    setPortfolioHoldings(next.holdings);
+    setPortfolioTransactions(next.transactions);
+    setPortfolioPrincipalRecords(next.principalRecords);
+  };
+
+  const deleteTransaction = (transaction) => {
+    if (!transaction?.id) return;
+    if (typeof window !== 'undefined' && !window.confirm('删除这条交易并重建当前组合流水？')) return;
+    applyLedgerRebuild({ transactionId: transaction.id });
   };
 
   const recordSnapshot = () => {
@@ -534,6 +572,9 @@ export default function PortfolioWorkspace({
               holdings={portfolioHoldings}
               transactions={portfolioTransactions}
               principalRecords={portfolioPrincipalRecords}
+              onDeleteTransaction={deleteTransaction}
+              onRebuildLedger={() => applyLedgerRebuild()}
+              canMutateLedger={Boolean(selectedTransactionBaseline)}
             />
           )}
 

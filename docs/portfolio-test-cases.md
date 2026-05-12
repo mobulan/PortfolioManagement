@@ -25,6 +25,7 @@ node scripts/portfolio-import-smoke-test.mjs
 | Sell transaction | Selling an existing fund reduces shares and proportional cost basis. | Bond share 150, cost amount 157.5, principal decrease -52.5. | Automated |
 | Profitable sell transaction | Selling at a market amount above proportional cost does not over-reduce principal. | Profit-sale holding share 100, cost amount 110, principal decrease -110. | Automated |
 | Cash in/out | Cash transactions update manual cash value and principal. | Cash in raises value/cost to 120; cash out lowers value/cost to 95. | Automated |
+| Transaction baseline rebuild | Deleting a transaction rebuilds the selected portfolio from a captured baseline and remaining transactions. | Deleted transaction is absent, current portfolio holdings/principal records are replayed, and other portfolio rows are preserved. | Automated |
 | Snapshot | Snapshot captures summary and asset-class values. | Snapshot value 700 and equity asset-class value 220. | Automated |
 | JSON export/import | Exported portfolio payload can be parsed and imported. | Valid portfolios, holdings, transactions, principal records, and snapshots are preserved. | Automated |
 | Invalid JSON relationships | Import filters orphan holdings, transactions, principal records, and snapshots. | Only records linked to existing portfolio/holding/transaction IDs remain. | Automated |
@@ -45,7 +46,7 @@ node scripts/portfolio-import-smoke-test.mjs
 | --- | --- | --- | --- |
 | UI portfolio editor | Create permanent portfolio from the UI. | Four target allocation rows render and can be saved without corrupting ratios. | Requires Agent E UI surface. |
 | UI holdings | Add multiple funds under one asset class. | Dashboard and detail views show both holdings and one aggregated sleeve. | Basic UI exists; needs browser-level regression coverage. |
-| UI transactions | Enter buy, sell, cash in, and cash out from forms. | Form validation prevents missing portfolio/holding IDs and updates principal history. | Requires Agent F/E surface. |
+| UI transactions | Enter buy, sell, cash in, cash out, delete a baseline-backed transaction, and rebuild ledger. | Form validation prevents missing portfolio/holding IDs; delete/rebuild uses captured baseline and updates principal history. | Basic UI exists; needs browser-level regression coverage. |
 | UI rebalance | Trigger rebalance view for a drifted portfolio. | Buy/sell suggestions match calculation engine amounts and thresholds. | Requires Agent E/G surface. |
 | Import/export UI | Export JSON, re-import it, and inspect state. | User-facing import reports filtered invalid records and preserves valid records. | Requires Agent H/E surface. |
 | Migration UI | Preview legacy fund holdings, run migration, then preview again. | First preview shows migratable holdings; after migration, duplicate fund codes are skipped and no duplicate portfolio holdings are created. | Requires migration panel integration into a future workspace pass. |

@@ -37,6 +37,7 @@ export default function PortfolioTransactionsPanel({
   principalRecords = [],
   onDeleteTransaction,
   onRebuildLedger,
+  canMutateLedger = true,
 }) {
   const scopedTransactions = transactions
     .filter((tx) => !portfolioId || tx.portfolioId === portfolioId)
@@ -50,7 +51,7 @@ export default function PortfolioTransactionsPanel({
     <section className="portfolio-panel glass">
       <div className="portfolio-panel-header">
         <h3>Transactions and principal</h3>
-        <button type="button" className="button secondary" onClick={() => onRebuildLedger?.()}>
+        <button type="button" className="button secondary" onClick={() => onRebuildLedger?.()} disabled={!canMutateLedger}>
           <RefreshCw size={16} />
           Rebuild
         </button>
@@ -85,6 +86,7 @@ export default function PortfolioTransactionsPanel({
                       type="button"
                       className="button ghost"
                       onClick={() => onDeleteTransaction?.(tx)}
+                      disabled={!canMutateLedger}
                       title="Delete transaction"
                     >
                       <Trash2 size={16} />

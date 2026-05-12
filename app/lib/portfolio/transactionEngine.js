@@ -146,3 +146,57 @@ export function rebuildPortfolioLedgerFromTransactions({ holdings = [], transact
     principalRecords: [],
   });
 }
+
+export function createPortfolioTransactionBaseline({ portfolioId = '', holdings = [], createdAt = new Date().toISOString() } = {}) {
+  const baselineHoldings = (Array.isArray(holdings) ? holdings : [])
+    .map(normalizePortfolioHolding)
+    .filter((holding) => !portfolioId || holding.portfolioId === portfolioId)
+    .map((holding) => ({
+      ...holding,
+      baselineCreatedAt: createdAt,
+    }));
+
+  return {
+    id: `transaction_baseline_${portfolioId || 'all'}_${Date.parse(createdAt) || Date.now()}`,
+    portfolioId,
+    createdAt,
+    holdings: baselineHoldings,
+  };
+}
+
+export function rebuildPortfolioAfterTransactionDelete({
+  portfolioId = '',
+  baseline,
+  holdings = [],
+  transactions = [],
+  principalRecords = [],
+  transactionId = '',
+} = {}) {
+  const scopedBaselineHoldings = (baseline?.holdings || [])
+    .map(normalizePortfolioHolding)
+    .filter((holding) => !portfolioId || holding.portfolioId === portfolioId);
+  const otherHoldings = (Array.isArray(holdings) ? holdings : [])
+    .map(normalizePortfolioHolding)
+    .filter((holding) => portfolioId && holding.portfolioId !== portfolioId);
+  const remainingTransactions = (Array.isArray(transactions) ? transactions : [])
+    .map(normalizePortfolioTransaction)
+    .filter((transaction) => transaction.id !== transactionId);
+  const scopedTransactions = remainingTransactions
+    .filter((transaction) => !portfolioId || transaction.portfolioId === portfolioId);
+  const otherTransactions = remainingTransactions
+    .filter((transaction) => portfolioId && transaction.portfolioId !== portfolioId);
+  const otherPrincipalRecords = (Array.isArray(principalRecords) ? principalRecords : [])
+    .map(normalizePrincipalRecord)
+    .filter((record) => portfolioId && record.portfolioId !== portfolioId);
+
+  const rebuilt = rebuildPortfolioLedgerFromTransactions({
+    holdings: scopedBaselineHoldings,
+    transactions: scopedTransactions,
+  });
+
+  return {
+    holdings: [...otherHoldings, ...rebuilt.holdings],
+    transactions: [...otherTransactions, ...rebuilt.transactions],
+    principalRecords: [...otherPrincipalRecords, ...rebuilt.principalRecords],
+  };
+}
