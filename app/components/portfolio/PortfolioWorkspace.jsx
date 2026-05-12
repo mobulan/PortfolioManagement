@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Plus, Save, WalletCards } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Info, Plus, Save, Trash2, WalletCards } from 'lucide-react';
 import {
   ASSET_CLASSES,
+  buildPortfolioHoldingFromDraft,
   createDefaultPortfolio,
-  normalizePortfolioHolding,
+  normalizePortfolioFundCandidate,
   calculatePortfolioSummary,
   aggregateDashboard,
   calculateRebalancePlan,
@@ -16,6 +17,7 @@ import {
   analyzePortfolioImport,
   previewLegacyHoldingsMigration,
 } from '@/app/lib/portfolio';
+import { fetchFundData, searchFunds } from '@/app/api/fund';
 import PortfolioBacktestPanel from './PortfolioBacktestPanel';
 import PortfolioDetailTabs from './PortfolioDetailTabs';
 import PortfolioEditorPanel from './PortfolioEditorPanel';
@@ -29,6 +31,11 @@ const money = (value) => Number(value || 0).toLocaleString('zh-CN', {
 });
 const pct = (value) => `${((Number(value) || 0) * 100).toFixed(2)}%`;
 const today = () => new Date().toISOString().slice(0, 10);
+const customPortfolioNumber = (name = '') => {
+  const match = String(name).trim().match(/^自定义组合\s*(\d+)?$/);
+  if (!match) return null;
+  return Number(match[1] || 1);
+};
 
 export default function PortfolioWorkspace({
   funds = [],
@@ -60,7 +67,10 @@ export default function PortfolioWorkspace({
     costAmount: '',
     estimatedNav: '',
     manualValue: '',
+    valueMode: 'amount',
   });
+  const [holdingFundMatches, setHoldingFundMatches] = useState([]);
+  const [isHoldingFundSearching, setIsHoldingFundSearching] = useState(false);
   const [transactionDraft, setTransactionDraft] = useState({
     type: 'buy',
     holdingId: '',
@@ -75,10 +85,25 @@ export default function PortfolioWorkspace({
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
   const [importAnalysis, setImportAnalysis] = useState(null);
 
-  const selectedPortfolio = useMemo(
-    () => portfolios.find((row) => row.id === selectedPortfolioId) || portfolios[0] || null,
-    [portfolios, selectedPortfolioId],
+  const activePortfolios = useMemo(
+    () => portfolios.filter((portfolio) => !portfolio.archived),
+    [portfolios],
   );
+  const selectedPortfolio = useMemo(
+    () => activePortfolios.find((row) => row.id === selectedPortfolioId) || activePortfolios[0] || null,
+    [activePortfolios, selectedPortfolioId],
+  );
+
+  useEffect(() => {
+    if (!activePortfolios.length) {
+      setSelectedPortfolioId('');
+      return;
+    }
+    if (!activePortfolios.some((portfolio) => portfolio.id === selectedPortfolioId)) {
+      setSelectedPortfolioId(activePortfolios[0].id);
+    }
+  }, [activePortfolios, selectedPortfolioId]);
+
   const dashboard = useMemo(() => aggregateDashboard(portfolios, portfolioHoldings), [portfolios, portfolioHoldings]);
   const selectedSummary = useMemo(
     () => selectedPortfolio ? calculatePortfolioSummary(selectedPortfolio, portfolioHoldings) : null,
@@ -130,16 +155,73 @@ export default function PortfolioWorkspace({
     }),
     [funds, legacyHoldings, portfolioHoldings, selectedPortfolio?.id],
   );
+  const localFundMatches = useMemo(() => {
+    const query = String(holdingDraft.fundCode || holdingDraft.fundName || '').trim().toLowerCase();
+    if (!query || holdingDraft.instrumentType === 'cash') return [];
+    return (Array.isArray(funds) ? funds : [])
+      .map(normalizePortfolioFundCandidate)
+      .filter(Boolean)
+      .filter((fund) => fund.code.includes(query) || fund.name.toLowerCase().includes(query))
+      .slice(0, 5);
+  }, [funds, holdingDraft.fundCode, holdingDraft.fundName, holdingDraft.instrumentType]);
+  const fundSuggestions = useMemo(() => {
+    const byCode = new Map();
+    [...localFundMatches, ...holdingFundMatches.map(normalizePortfolioFundCandidate).filter(Boolean)].forEach((fund) => {
+      if (!fund.code || byCode.has(fund.code)) return;
+      byCode.set(fund.code, fund);
+    });
+    return Array.from(byCode.values()).slice(0, 6);
+  }, [holdingFundMatches, localFundMatches]);
+
+  useEffect(() => {
+    const query = String(holdingDraft.fundCode || holdingDraft.fundName || '').trim();
+    if (holdingDraft.instrumentType === 'cash' || query.length < 2) {
+      setHoldingFundMatches([]);
+      setIsHoldingFundSearching(false);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setIsHoldingFundSearching(true);
+      try {
+        const results = await searchFunds(query);
+        if (!cancelled) setHoldingFundMatches(Array.isArray(results) ? results : []);
+      } finally {
+        if (!cancelled) setIsHoldingFundSearching(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [holdingDraft.fundCode, holdingDraft.fundName, holdingDraft.instrumentType]);
+
+  useEffect(() => {
+    const code = String(holdingDraft.fundCode || '').trim();
+    if (!code || holdingDraft.instrumentType === 'cash') return;
+    const exact = fundSuggestions.find((fund) => fund.code === code);
+    if (!exact) return;
+    setHoldingDraft((prev) => {
+      if (prev.fundCode !== code) return prev;
+      const nextName = prev.fundName || exact.name;
+      const nextNav = prev.estimatedNav || (exact.estimatedNav ? String(exact.estimatedNav) : '');
+      if (nextName === prev.fundName && nextNav === prev.estimatedNav) return prev;
+      return { ...prev, fundName: nextName, estimatedNav: nextNav };
+    });
+  }, [fundSuggestions, holdingDraft.fundCode, holdingDraft.instrumentType]);
 
   const ensureDefaultPortfolio = () => {
     const portfolio = createDefaultPortfolio('permanent', { name: '我的基金组合' });
-    setPortfolios([portfolio]);
+    setPortfolios((prev) => [...prev, portfolio]);
     setSelectedPortfolioId(portfolio.id);
   };
 
   const addPortfolio = (type = 'custom') => {
+    const usedCustomNumbers = new Set(portfolios.map((portfolio) => customPortfolioNumber(portfolio.name)).filter(Boolean));
+    let nextCustomNumber = 1;
+    while (usedCustomNumbers.has(nextCustomNumber)) nextCustomNumber += 1;
     const portfolio = createDefaultPortfolio(type, {
-      name: type === 'permanent' ? '永久投资组合' : type === 'all_weather' ? '全天候组合' : `自定义组合 ${portfolios.length + 1}`,
+      name: type === 'permanent' ? '\u6c38\u4e45\u6295\u8d44\u7ec4\u5408' : type === 'all_weather' ? '\u5168\u5929\u5019\u7ec4\u5408' : `\u81ea\u5b9a\u4e49\u7ec4\u5408 ${nextCustomNumber}`,
     });
     setPortfolios((prev) => [...prev, portfolio]);
     setSelectedPortfolioId(portfolio.id);
@@ -147,25 +229,10 @@ export default function PortfolioWorkspace({
 
   const addHolding = () => {
     if (!selectedPortfolio) return;
-    const fund = funds.find((row) => String(row.code) === String(holdingDraft.fundCode).trim());
-    const estimatedNav = holdingDraft.instrumentType === 'cash'
-      ? null
-      : Number(holdingDraft.estimatedNav || fund?.gsz || fund?.dwjz || 0);
-    const manualValue = holdingDraft.instrumentType === 'cash'
-      ? Number(holdingDraft.manualValue || holdingDraft.costAmount || 0)
-      : null;
-    const holding = normalizePortfolioHolding({
+    const holding = buildPortfolioHoldingFromDraft({
       portfolioId: selectedPortfolio.id,
-      assetClassId: holdingDraft.assetClassId,
-      instrumentType: holdingDraft.instrumentType,
-      fundCode: holdingDraft.instrumentType === 'cash' ? '' : String(holdingDraft.fundCode).trim(),
-      fundName: holdingDraft.fundName || fund?.name || (holdingDraft.instrumentType === 'cash' ? '现金' : String(holdingDraft.fundCode).trim()),
-      share: Number(holdingDraft.share || (holdingDraft.instrumentType === 'cash' ? 1 : 0)),
-      costAmount: Number(holdingDraft.costAmount || manualValue || 0),
-      estimatedNav,
-      currentNav: Number(fund?.dwjz || estimatedNav || 0) || null,
-      previousNav: Number(fund?.dwjz || 0) || null,
-      manualValue,
+      draft: holdingDraft,
+      funds: [...funds, ...holdingFundMatches],
     });
     setPortfolioHoldings((prev) => [...prev, holding]);
     setHoldingDraft({
@@ -177,7 +244,44 @@ export default function PortfolioWorkspace({
       costAmount: '',
       estimatedNav: '',
       manualValue: '',
+      valueMode: 'amount',
     });
+    setHoldingFundMatches([]);
+  };
+
+  const selectHoldingFund = async (fund) => {
+    const candidate = normalizePortfolioFundCandidate(fund);
+    if (!candidate) return;
+    setHoldingDraft((prev) => ({
+      ...prev,
+      fundCode: candidate.code,
+      fundName: candidate.name,
+      estimatedNav: candidate.estimatedNav ? String(candidate.estimatedNav) : prev.estimatedNav,
+    }));
+    setHoldingFundMatches([]);
+    if (candidate.estimatedNav || !candidate.code) return;
+    try {
+      const detail = await fetchFundData(candidate.code);
+      const detailed = normalizePortfolioFundCandidate(detail);
+      if (!detailed) return;
+      setHoldingDraft((prev) => (
+        prev.fundCode === candidate.code
+          ? {
+              ...prev,
+              fundName: prev.fundName || detailed.name,
+              estimatedNav: detailed.estimatedNav ? String(detailed.estimatedNav) : prev.estimatedNav,
+            }
+          : prev
+      ));
+    } catch {
+      // Search result selection still provides code and name; NAV can be entered manually.
+    }
+  };
+
+  const archiveHolding = (holdingId) => {
+    setPortfolioHoldings((prev) => prev.map((holding) => (
+      holding.id === holdingId ? { ...holding, archived: true } : holding
+    )));
   };
 
   const recordTransaction = () => {
@@ -260,8 +364,19 @@ export default function PortfolioWorkspace({
     setPortfolios((prev) => prev.map((row) => (row.id === nextPortfolio.id ? nextPortfolio : row)));
   };
 
-  const archivePortfolio = (_portfolioId, archivedPortfolio) => {
-    savePortfolio(archivedPortfolio);
+  const deletePortfolio = (portfolioId = selectedPortfolio?.id) => {
+    if (!portfolioId) return;
+    const portfolio = portfolios.find((row) => row.id === portfolioId);
+    const portfolioName = portfolio?.name || '当前组合';
+    if (typeof window !== 'undefined' && !window.confirm(`删除“${portfolioName}”？该组合下的持仓、交易和历史记录也会一起删除。`)) return;
+    const nextPortfolio = activePortfolios.find((row) => row.id !== portfolioId);
+    setPortfolios((prev) => prev.filter((row) => row.id !== portfolioId));
+    setPortfolioHoldings((prev) => prev.filter((row) => row.portfolioId !== portfolioId));
+    setPortfolioTransactions((prev) => prev.filter((row) => row.portfolioId !== portfolioId));
+    setPortfolioPrincipalRecords((prev) => prev.filter((row) => row.portfolioId !== portfolioId));
+    setPortfolioSnapshots((prev) => prev.filter((row) => row.portfolioId !== portfolioId));
+    setPortfolioBacktests((prev) => prev.filter((row) => row.portfolioId !== portfolioId));
+    setSelectedPortfolioId(nextPortfolio?.id || '');
   };
 
   const createPortfolioFromEditor = (nextPortfolio) => {
@@ -269,7 +384,7 @@ export default function PortfolioWorkspace({
     setSelectedPortfolioId(nextPortfolio.id);
   };
 
-  if (!portfolios.length) {
+  if (!activePortfolios.length) {
     return (
       <section className="portfolio-workspace">
         <div className="portfolio-empty glass">
@@ -289,17 +404,29 @@ export default function PortfolioWorkspace({
     <section className="portfolio-workspace">
       <div className="portfolio-toolbar glass">
         <div>
-          <span className="muted">PortfolioManagement</span>
+          <span className="muted">Portfolio Management</span>
           <h2>投资组合</h2>
+          <p>先设定目标比例，再录入持仓和交易，系统会按偏离度给出再平衡建议。</p>
         </div>
         <div className="portfolio-toolbar-actions">
           <select className="select" value={selectedPortfolio?.id || ''} onChange={(e) => setSelectedPortfolioId(e.target.value)}>
-            {portfolios.map((portfolio) => (
+            {activePortfolios.map((portfolio) => (
               <option key={portfolio.id} value={portfolio.id}>{portfolio.name}</option>
             ))}
           </select>
-          <button type="button" className="button secondary" onClick={() => addPortfolio('permanent')}>永久组合</button>
-          <button type="button" className="button secondary" onClick={() => addPortfolio('custom')}>自定义</button>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => deletePortfolio(selectedPortfolio?.id)}
+            disabled={!selectedPortfolio}
+          >
+            <Trash2 size={16} />
+            删除
+          </button>
+          <button type="button" className="button secondary" onClick={() => addPortfolio('custom')}>
+            <Plus size={16} />
+            新建
+          </button>
         </div>
       </div>
 
@@ -318,7 +445,15 @@ export default function PortfolioWorkspace({
         errors={validationErrors}
       />
 
-      <div className="portfolio-layout">
+      <div className="portfolio-help-strip" role="note">
+        <Info size={16} aria-hidden="true" />
+        <span>
+          当前组合：<strong>{selectedPortfolio?.name || '未选择'}</strong>。
+          {selectedHoldings.length > 0 ? '可在“再平衡”查看买入/卖出建议。' : '建议先在“持仓”中添加资产，概览和偏离度才会有实际数据。'}
+        </span>
+      </div>
+
+      <div className={`portfolio-layout ${activeDetailTab === 'holdings' ? 'is-holdings' : ''}`}>
         <div className="portfolio-main">
           {activeDetailTab === 'overview' && (
           <Panel title="组合概览">
@@ -331,7 +466,7 @@ export default function PortfolioWorkspace({
               </div>
             )}
             <div className="portfolio-asset-bars">
-              {(selectedSummary?.assetClasses || []).map((row) => (
+              {(selectedSummary?.assetClasses || []).length > 0 ? (selectedSummary?.assetClasses || []).map((row) => (
                 <div key={row.assetClassId} className="portfolio-asset-row">
                   <span>{row.assetClassName}</span>
                   <div className="portfolio-asset-track">
@@ -340,15 +475,20 @@ export default function PortfolioWorkspace({
                   <strong>{pct(row.currentRatio)}</strong>
                   <em>目标 {pct(row.targetRatio)}</em>
                 </div>
-              ))}
+              )) : (
+                <EmptyHint
+                  title="还没有资产分布"
+                  description="添加持仓后，这里会显示当前比例、目标比例和偏离情况。"
+                />
+              )}
             </div>
           </Panel>
           )}
 
           {activeDetailTab === 'holdings' && (
           <Panel title="持仓">
-            <div className="portfolio-table-wrap">
-              <table className="portfolio-table">
+            <div className="portfolio-table-wrap portfolio-holdings-wrap">
+              <table className="portfolio-table portfolio-holdings-table">
                 <thead>
                   <tr>
                     <th>资产</th>
@@ -356,10 +496,11 @@ export default function PortfolioWorkspace({
                     <th>份额</th>
                     <th>本金</th>
                     <th>市值</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedHoldings.map((holding) => {
+                  {selectedHoldings.length ? selectedHoldings.map((holding) => {
                     const nav = holding.manualValue ?? holding.currentValue ?? (holding.share || 0) * (holding.estimatedNav ?? holding.currentNav ?? holding.costPrice ?? 0);
                     return (
                       <tr key={holding.id}>
@@ -368,9 +509,19 @@ export default function PortfolioWorkspace({
                         <td>{money(holding.share)}</td>
                         <td>¥{money(holding.costAmount)}</td>
                         <td>¥{money(nav)}</td>
+                        <td>
+                          <button type="button" className="button ghost portfolio-row-action" onClick={() => archiveHolding(holding.id)}>
+                            <Trash2 size={15} />
+                            移除
+                          </button>
+                        </td>
                       </tr>
                     );
-                  })}
+                  }) : (
+                    <tr>
+                      <td colSpan={6}>暂无持仓。请使用右侧表单添加基金、现金或手动资产。</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -389,13 +540,18 @@ export default function PortfolioWorkspace({
           {activeDetailTab === 'rebalance' && (
           <Panel title="再平衡">
             <div className="portfolio-rebalance-list">
-              {(rebalancePlan?.items || []).map((item) => (
+              {(rebalancePlan?.items || []).length ? (rebalancePlan?.items || []).map((item) => (
                 <div key={item.assetClassId} className={`portfolio-rebalance-item is-${item.action}`}>
                   <span>{item.assetClassName}</span>
                   <strong>{item.action === 'buy' ? '买入' : item.action === 'sell' ? '卖出' : '保持'}</strong>
                   <em>¥{money(Math.abs(item.rebalanceAmount))}</em>
                 </div>
-              ))}
+              )) : (
+                <EmptyHint
+                  title="暂无再平衡建议"
+                  description="设置目标比例并录入持仓后，系统会计算每类资产需要买入、卖出或保持。"
+                />
+              )}
             </div>
             <div className="portfolio-inline-form">
               <input className="input" value={cashflowAmount} onChange={(e) => setCashflowAmount(e.target.value)} placeholder="新增/取出资金" />
@@ -436,7 +592,7 @@ export default function PortfolioWorkspace({
             <PortfolioEditorPanel
               portfolio={selectedPortfolio}
               onSavePortfolio={savePortfolio}
-              onArchivePortfolio={archivePortfolio}
+              onDeletePortfolio={deletePortfolio}
               onCreatePortfolio={createPortfolioFromEditor}
             />
           )}
@@ -445,6 +601,7 @@ export default function PortfolioWorkspace({
           <>
           <PortfolioMigrationPanel preview={legacyMigrationPreview} onRunMigration={runLegacyMigration} />
           <Panel title="新增持仓">
+            <p className="portfolio-panel-intro">基金可填写代码自动匹配名称；现金和手动资产可直接填名称与金额。</p>
             <div className="portfolio-form">
               <select className="select" value={holdingDraft.instrumentType} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, instrumentType: e.target.value }))}>
                 <option value="fund">基金/ETF</option>
@@ -454,11 +611,36 @@ export default function PortfolioWorkspace({
               <select className="select" value={holdingDraft.assetClassId} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, assetClassId: e.target.value }))}>
                 {ASSET_CLASSES.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
               </select>
-              <input className="input" value={holdingDraft.fundCode} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, fundCode: e.target.value }))} placeholder="基金代码" />
-              <input className="input" value={holdingDraft.fundName} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, fundName: e.target.value }))} placeholder="名称，可自动带出" />
-              <input className="input" value={holdingDraft.share} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, share: e.target.value }))} placeholder="份额" />
+              <div className="portfolio-code-name-field">
+                <div className="portfolio-code-name-row">
+                  <input className="input" value={holdingDraft.fundCode} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, fundCode: e.target.value }))} placeholder="代码" />
+                  <input className="input" value={holdingDraft.fundName} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, fundName: e.target.value }))} placeholder="名称" />
+                </div>
+                {holdingDraft.instrumentType !== 'cash' && (fundSuggestions.length > 0 || isHoldingFundSearching) && (
+                  <div className="portfolio-fund-suggestions">
+                    {isHoldingFundSearching && <span className="muted">搜索中...</span>}
+                    {fundSuggestions.map((fund) => (
+                      <button key={fund.code} type="button" onClick={() => selectHoldingFund(fund)}>
+                        <strong>{fund.code}</strong>
+                        <span>{fund.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="portfolio-mode-toggle" role="group" aria-label="持仓录入模式">
+                <button type="button" className={holdingDraft.valueMode === 'amount' ? 'is-active' : ''} onClick={() => setHoldingDraft((prev) => ({ ...prev, valueMode: 'amount' }))}>按市值录入</button>
+                <button type="button" className={holdingDraft.valueMode === 'share' ? 'is-active' : ''} onClick={() => setHoldingDraft((prev) => ({ ...prev, valueMode: 'share' }))}>按份额录入</button>
+              </div>
               <input className="input" value={holdingDraft.costAmount} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, costAmount: e.target.value }))} placeholder="本金/成本金额" />
-              <input className="input" value={holdingDraft.estimatedNav} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, estimatedNav: e.target.value }))} placeholder="估算净值" />
+              {holdingDraft.valueMode === 'amount' ? (
+                <input className="input" value={holdingDraft.manualValue} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, manualValue: e.target.value }))} placeholder="当前市值" />
+              ) : (
+                <>
+                  <input className="input" value={holdingDraft.share} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, share: e.target.value }))} placeholder="份额" />
+                  <input className="input" value={holdingDraft.estimatedNav} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, estimatedNav: e.target.value }))} placeholder="估算净值" />
+                </>
+              )}
               <button type="button" className="button" onClick={addHolding}><Plus size={16} />添加持仓</button>
             </div>
           </Panel>
@@ -467,6 +649,7 @@ export default function PortfolioWorkspace({
 
           {activeDetailTab === 'transactions' && (
           <Panel title="记录交易">
+            <p className="portfolio-panel-intro">交易会同步更新持仓与本金记录，适合记录买入、卖出、现金流和分红。</p>
             <div className="portfolio-form">
               <select className="select" value={transactionDraft.holdingId} onChange={(e) => setTransactionDraft((prev) => ({ ...prev, holdingId: e.target.value }))}>
                 <option value="">选择持仓</option>
@@ -519,5 +702,14 @@ function Panel({ title, children }) {
       <h3>{title}</h3>
       {children}
     </section>
+  );
+}
+
+function EmptyHint({ title, description }) {
+  return (
+    <div className="portfolio-empty-hint">
+      <strong>{title}</strong>
+      <span>{description}</span>
+    </div>
   );
 }

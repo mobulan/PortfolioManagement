@@ -94,6 +94,8 @@ export default function FundHistoryNetValueModal({ open, onOpenChange, code, the
 
   const data = useMemo(() => buildRows(historyRaw || []), [historyRaw]);
 
+  // TanStack Table returns function-bearing objects that React Compiler intentionally skips.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,
@@ -300,4 +302,3 @@ export default function FundHistoryNetValueModal({ open, onOpenChange, code, the
     </Dialog>
   );
 }
-

@@ -291,8 +291,7 @@ export default function HomePage() {
     if (typeof window !== 'undefined') {
       initSort();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initSort]);
 
   // 当用户关闭某个排序规则时，如果当前 sortBy 不再可用，则自动切换到第一个启用的规则
   useEffect(() => {
@@ -307,7 +306,7 @@ export default function HomePage() {
     if (!enabledIds.includes(sortBy)) {
       setSortBy(enabledIds[0]);
     }
-  }, [sortRules, sortBy]);
+  }, [sortRules, sortBy, setSortRules, setSortBy]);
 
   // 视图模式
   const [viewMode, setViewMode] = useState('list'); // card, list
@@ -1093,6 +1092,7 @@ export default function HomePage() {
     currentTab,
     summaryHoldingSourceGroupByCode,
     linkedHoldingsForAllFav,
+    groupHoldings,
   ]);
   const portfolioDailySeries = useMemo(
     () => {
@@ -1767,7 +1767,6 @@ export default function HomePage() {
     [
       displayFunds,
       holdingsForTabWithLinked,
-      isTradingDay,
       todayStr,
       getHoldingProfitForTab,
       dcaPlansForTab,
@@ -2429,6 +2428,9 @@ export default function HomePage() {
         syncUserConfig(userIdRef.current, false, payload, false);
       }
     }, 1000 * 2); // 往云端同步的防抖时间
+  // scheduleSync must stay stable because it is registered into the storage store below.
+  // It reads the latest mutable sync state through refs and store calls.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const { setOnSync } = useStorageStore();
@@ -2673,7 +2675,7 @@ export default function HomePage() {
       if (next.size === 0) setCurrentTab('all');
       return next;
     });
-  }, [storageHelper]);
+  }, [setFavorites]);
 
   const toggleCollapse = useCallback((code) => {
     setCollapsedCodes(prev => {
@@ -2849,7 +2851,7 @@ export default function HomePage() {
     } finally {
       isSchedulingDcaRef.current = false;
     }
-  }, [isTradingDay, dcaPlans, funds, todayStr, storageHelper, groups]);
+  }, [isTradingDay, dcaPlans, funds, todayStr, groups, setDcaPlans, setPendingTrades]);
 
   useEffect(() => {
     if (!isTradingDay) return;
@@ -3407,6 +3409,8 @@ export default function HomePage() {
     };
     init();
     return () => { cancelled = true; };
+  // Local bootstrap is intentionally run once; adding store values here would re-run migration and overwrite active UI state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSupabaseConfigured]);
 
   // 切换分组后，页面自动回到顶部（跳过首次初始化恢复）
@@ -3423,7 +3427,7 @@ export default function HomePage() {
       if (!changed) return prev;
       return next;
     });
-  }, [holdings, groups]);
+  }, [holdings, groups, setGroupHoldings]);
 
   // 记录用户当前选择的分组（仅本地存储，不同步云端）
   useEffect(() => {
@@ -3510,6 +3514,8 @@ export default function HomePage() {
     });
 
     return () => subscription.unsubscribe();
+  // Auth listener is registered once. Session callbacks use current store actions and refs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // // 实时同步
@@ -3608,6 +3614,8 @@ export default function HomePage() {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
+  // The interval is controlled by refreshMs; refreshAll reads the latest fund codes from refreshCodesRef.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshMs]);
 
   const performSearch = async (val) => {
@@ -4131,6 +4139,7 @@ export default function HomePage() {
     applyViewMode(nextMode);
   };
 
+  const requestRemoveFundRef = useRef(null);
   const requestRemoveFund = (fund) => {
     const gid =
       currentTab !== 'all' && currentTab !== 'fav' && groups.some((g) => g.id === currentTab)
@@ -4173,6 +4182,7 @@ export default function HomePage() {
       removeFund(fund.code);
     }
   };
+  requestRemoveFundRef.current = requestRemoveFund;
 
   /** @returns {boolean|void} false 表示已弹出二次确认，由确认成功回调再清空选中；true 表示已立即执行，调用方可清空多选 */
   const requestRemoveFundsFromCurrentGroup = (codes) => {
@@ -6269,6 +6279,7 @@ export default function HomePage() {
       clearConfirm,
       donateOpen,
       fundDeleteConfirm,
+      fundDeleteBulkConfirm,
       isUpdateModalOpen,
       weChatOpen,
       scanModalOpen,
@@ -6352,8 +6363,8 @@ export default function HomePage() {
   const handleRemoveFundEntry = useCallback((rowOrFund) => {
     if (!rowOrFund?.code) return;
     const name = rowOrFund.name ?? rowOrFund.fundName ?? rowOrFund.code;
-    requestRemoveFund({ code: rowOrFund.code, name });
-  }, [requestRemoveFund]);
+    requestRemoveFundRef.current?.({ code: rowOrFund.code, name });
+  }, []);
 
   const handleToggleFavoriteRow = useCallback((row) => {
     if (!row || !row.code) return;
@@ -6833,7 +6844,7 @@ export default function HomePage() {
                       onClick={() => startTransition(() => setCurrentTab('portfolio'))}
                       transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 1 }}
                     >
-                      投资组合 ({portfolios.length})
+                      投资组合 ({portfolios.filter((portfolio) => !portfolio.archived).length})
                     </motion.button>
                     {groups.map(g => (
                       <motion.button

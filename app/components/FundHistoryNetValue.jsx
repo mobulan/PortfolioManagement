@@ -77,6 +77,8 @@ export default function FundHistoryNetValue({ code, range = '1m', theme }) {
 
   const data = useMemo(() => buildRows(historyRaw || []), [historyRaw]);
 
+  // TanStack Table returns function-bearing objects that React Compiler intentionally skips.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,

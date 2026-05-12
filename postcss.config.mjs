@@ -1,6 +1,6 @@
 import pxtorem from "postcss-pxtorem";
 
-export default {
+const config = {
   plugins: {
     "@tailwindcss/postcss": {},
     autoprefixer: {},
@@ -13,3 +13,5 @@ export default {
     }),
   },
 };
+
+export default config;

@@ -6,4 +6,6 @@ export * from './snapshot.js';
 export * from './importExport.js';
 export * from './backtest.js';
 export * from './migrations.js';
+export * from './holdingForm.js';
+export * from './editorForm.js';
 export * from './storage.js';

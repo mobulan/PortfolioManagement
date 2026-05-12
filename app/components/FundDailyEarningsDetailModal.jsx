@@ -96,6 +96,8 @@ export default function FundDailyEarningsDetailModal({
     [masked],
   );
 
+  // TanStack Table returns function-bearing objects that React Compiler intentionally skips.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,

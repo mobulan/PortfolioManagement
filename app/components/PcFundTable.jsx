@@ -1810,8 +1810,6 @@ export default function PcFundTable({
     ],
     [
       currentTab,
-      favorites,
-      sortBy,
       showFullFundName,
       getFundCardProps,
       masked,
@@ -1825,7 +1823,6 @@ export default function PcFundTable({
       onRemoveFunds,
       onMoveFunds,
       setAllSelected,
-      toggleSelected,
       onFundTagsClick,
     ],
   );

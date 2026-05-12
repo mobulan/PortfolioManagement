@@ -109,12 +109,14 @@ export default function DcaModal({ fund, plan, onClose, onConfirm, onReset }) {
   const [firstDate, setFirstDate] = useState(() => computeFirstDate('monthly', null, null));
   const monthlyDayRef = useRef(null);
   const skipNextAutoComputeRef = useRef(false);
+  const initialWeeklyDayRef = useRef(weeklyDay);
+  const initialMonthlyDayRef = useRef(monthlyDay);
 
   useEffect(() => {
     skipNextAutoComputeRef.current = true;
     if (!plan) {
       // 新建定投时，以当前默认 weeklyDay/monthlyDay 计算一次首扣日期
-      setFirstDate(computeFirstDate('monthly', weeklyDay, monthlyDay));
+      setFirstDate(computeFirstDate('monthly', initialWeeklyDayRef.current, initialMonthlyDayRef.current));
       return;
     }
     if (plan.amount != null) {
@@ -446,4 +448,3 @@ export default function DcaModal({ fund, plan, onClose, onConfirm, onReset }) {
     </>
   );
 }
-

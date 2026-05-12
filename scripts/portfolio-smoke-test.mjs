@@ -32,6 +32,13 @@ import {
 import {
   previewLegacyHoldingsMigration,
 } from '../app/lib/portfolio/migrations.js';
+import {
+  buildPortfolioHoldingFromDraft,
+  findPortfolioFundCandidate,
+} from '../app/lib/portfolio/holdingForm.js';
+import {
+  normalizeAllocationDraftPercents,
+} from '../app/lib/portfolio/editorForm.js';
 
 const nearly = (actual, expected, delta = 0.01) => {
   assert.ok(Math.abs(actual - expected) <= delta, `${actual} not within ${delta} of ${expected}`);
@@ -486,6 +493,78 @@ test('legacy holdings migration preview skips duplicate portfolio fund codes', (
   nearly(preview.holdings[0].share, 50);
   nearly(preview.holdings[0].costAmount, 100);
   assert.equal(JSON.stringify(existingPortfolioHoldings), beforeExisting);
+});
+
+test('portfolio holding form matches fund candidates from loaded funds and search results', () => {
+  const loaded = findPortfolioFundCandidate([
+    { code: '006961', name: '富国深证红利ETF联接A', dwjz: 1.2, gsz: 1.25, lastNav: 1.18 },
+  ], '006961');
+  assert.equal(loaded.code, '006961');
+  assert.equal(loaded.name, '富国深证红利ETF联接A');
+  nearly(loaded.estimatedNav, 1.25);
+
+  const searched = findPortfolioFundCandidate([
+    { CODE: '022424', NAME: '永赢红利慧选混合发起A' },
+  ], '永赢');
+  assert.equal(searched.code, '022424');
+  assert.equal(searched.name, '永赢红利慧选混合发起A');
+});
+
+test('portfolio holding form supports amount and share input modes', () => {
+  const amountMode = buildPortfolioHoldingFromDraft({
+    portfolioId: portfolio.id,
+    draft: {
+      instrumentType: 'manual',
+      assetClassId: 'equity',
+      fundName: '手动股票',
+      valueMode: 'amount',
+      costAmount: '10',
+      manualValue: '12',
+    },
+    funds: [],
+  });
+  nearly(amountMode.costAmount, 10);
+  nearly(amountMode.manualValue, 12);
+  nearly(calculatePortfolioSummary(portfolio, [amountMode]).totalProfit, 2);
+
+  const shareMode = buildPortfolioHoldingFromDraft({
+    portfolioId: portfolio.id,
+    draft: {
+      instrumentType: 'fund',
+      assetClassId: 'equity',
+      fundCode: '006961',
+      valueMode: 'share',
+      costAmount: '10',
+      share: '100',
+    },
+    funds: [{ code: '006961', name: '富国深证红利ETF联接A', gsz: 0.12, dwjz: 0.11, lastNav: 0.1 }],
+  });
+  assert.equal(shareMode.fundName, '富国深证红利ETF联接A');
+  nearly(shareMode.costAmount, 10);
+  nearly(shareMode.share, 100);
+  nearly(calculatePortfolioSummary(portfolio, [shareMode]).totalValue, 12);
+  nearly(calculatePortfolioSummary(portfolio, [shareMode]).dailyEstimatedProfit, 2);
+});
+
+test('portfolio editor can normalize existing allocation rows to 100 percent', () => {
+  const normalized = normalizeAllocationDraftPercents([
+    { assetClassId: 'equity', targetPercent: '60', thresholdPercent: '5' },
+    { assetClassId: 'bond', targetPercent: '20', thresholdPercent: '5' },
+    { assetClassId: 'cash', targetPercent: '10', thresholdPercent: '5' },
+  ]);
+  assert.deepEqual(normalized.map((row) => row.assetClassId), ['equity', 'bond', 'cash']);
+  nearly(normalized.reduce((sum, row) => sum + Number(row.targetPercent), 0), 100, 0.0001);
+  nearly(Number(normalized[0].targetPercent), 66.67, 0.01);
+  nearly(Number(normalized[1].targetPercent), 22.22, 0.01);
+  nearly(Number(normalized[2].targetPercent), 11.11, 0.01);
+
+  const equalized = normalizeAllocationDraftPercents([
+    { assetClassId: 'equity', targetPercent: '', thresholdPercent: '5' },
+    { assetClassId: 'bond', targetPercent: '', thresholdPercent: '5' },
+  ]);
+  nearly(equalized.reduce((sum, row) => sum + Number(row.targetPercent), 0), 100, 0.0001);
+  nearly(Number(equalized[0].targetPercent), 50, 0.0001);
+  nearly(Number(equalized[1].targetPercent), 50, 0.0001);
 });
 
 test('backtest metrics and correlation remain finite for representative series', () => {

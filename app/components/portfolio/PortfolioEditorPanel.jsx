@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, CheckCircle2, CloudSun, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
+import { CheckCircle2, CloudSun, Info, Landmark, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
 import {
   ASSET_CLASSES,
   PORTFOLIO_TEMPLATE_OPTIONS,
@@ -9,6 +9,7 @@ import {
   createDefaultAllocations,
   createDefaultPortfolio,
   getAssetClassName,
+  normalizeAllocationDraftPercents,
   normalizePortfolio,
   validateTargetAllocations,
 } from '@/app/lib/portfolio';
@@ -23,6 +24,8 @@ const fromPercent = (value) => {
   return Number.isFinite(num) ? num / 100 : 0;
 };
 const templateName = (type) => PORTFOLIO_TEMPLATE_OPTIONS.find((row) => row.id === type)?.name || '组合模板';
+
+const currencyOptions = ['CNY', 'USD', 'HKD', 'EUR', 'JPY'];
 
 function allocationDraftFromRows(rows = []) {
   return (Array.isArray(rows) ? rows : []).map((row) => ({
@@ -56,7 +59,7 @@ function normalizedAllocationsFromDraft(draft) {
 export default function PortfolioEditorPanel({
   portfolio = null,
   onSavePortfolio,
-  onArchivePortfolio,
+  onDeletePortfolio,
   onCreatePortfolio,
   onDraftChange,
 }) {
@@ -109,6 +112,13 @@ export default function PortfolioEditorPanel({
     }));
   };
 
+  const normalizeAllocationsToHundred = () => {
+    setDraft((prev) => ({
+      ...prev,
+      allocations: normalizeAllocationDraftPercents(prev.allocations),
+    }));
+  };
+
   const addAllocationRow = () => {
     setDraft((prev) => ({
       ...prev,
@@ -136,13 +146,9 @@ export default function PortfolioEditorPanel({
     onSavePortfolio?.(normalizedDraft);
   };
 
-  const archivePortfolio = () => {
+  const deletePortfolio = () => {
     if (!portfolio?.id) return;
-    const archivedPortfolio = normalizePortfolio({
-      ...normalizedDraft,
-      archived: !portfolio.archived,
-    });
-    onArchivePortfolio?.(portfolio.id, archivedPortfolio);
+    onDeletePortfolio?.(portfolio.id);
   };
 
   const createFromTemplate = (type) => {
@@ -158,11 +164,12 @@ export default function PortfolioEditorPanel({
         <div>
           <span className="muted">Portfolio editor</span>
           <h3>组合设置</h3>
+          <p>模板负责快速建立资产框架，保存后总览会按目标比例计算偏离。</p>
         </div>
         <div className="portfolio-editor-actions">
-          <button type="button" className="button secondary" onClick={archivePortfolio} disabled={!portfolio?.id}>
-            <Archive size={16} />
-            {portfolio?.archived ? '恢复' : '归档'}
+          <button type="button" className="button secondary" onClick={deletePortfolio} disabled={!portfolio?.id}>
+            <Trash2 size={16} />
+            删除
           </button>
           <button type="button" className="button" onClick={savePortfolio} disabled={!canSave}>
             <Save size={16} />
@@ -179,7 +186,9 @@ export default function PortfolioEditorPanel({
             className={`button secondary ${draft.type === template.id ? 'is-active' : ''}`}
             onClick={() => applyTemplateToDraft(template.id)}
           >
-            {template.id === 'all_weather' ? <CloudSun size={16} /> : <RotateCcw size={16} />}
+            {template.id === 'permanent' && <Landmark size={16} />}
+            {template.id === 'all_weather' && <CloudSun size={16} />}
+            {template.id === 'custom' && <RotateCcw size={16} />}
             {template.name}
           </button>
         ))}
@@ -189,35 +198,33 @@ export default function PortfolioEditorPanel({
         </button>
       </div>
 
+      <div className="portfolio-editor-tip" role="note">
+        <Info size={16} aria-hidden="true" />
+        <span>目标比例用百分数填写，例如 25 表示 25%；阈值表示偏离超过多少时提醒再平衡。</span>
+      </div>
+
       <div className="portfolio-form portfolio-editor-form">
-        <input
-          className="input"
-          value={draft.name}
-          onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
-          placeholder="组合名称"
-        />
-        <select
-          className="select"
-          value={draft.type}
-          onChange={(event) => setDraft((prev) => ({ ...prev, type: event.target.value }))}
-        >
-          {PORTFOLIO_TEMPLATE_OPTIONS.map((template) => (
-            <option key={template.id} value={template.id}>{template.name}</option>
-          ))}
-        </select>
-        <input
-          className="input"
-          value={draft.baseCurrency}
-          onChange={(event) => setDraft((prev) => ({ ...prev, baseCurrency: event.target.value.toUpperCase() }))}
-          placeholder="币种"
-        />
-        <textarea
-          className="input portfolio-editor-description"
-          value={draft.description}
-          onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
-          placeholder="组合说明"
-          rows={3}
-        />
+        <div className="portfolio-editor-name-row">
+          <Field label="组合名称" hint="用于在顶部下拉框中识别不同策略。">
+            <input
+              className="input"
+              value={draft.name}
+              onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
+              placeholder="例如：我的基金组合"
+            />
+          </Field>
+          <Field label="币种" hint="常用币种。">
+            <select
+              className="select"
+              value={draft.baseCurrency}
+              onChange={(event) => setDraft((prev) => ({ ...prev, baseCurrency: event.target.value }))}
+            >
+              {currencyOptions.map((currency) => (
+                <option key={currency} value={currency}>{currency}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
       </div>
 
       <div className={`portfolio-detail-allocation portfolio-editor-total ${totalTone}`} aria-live="polite">
@@ -227,9 +234,23 @@ export default function PortfolioEditorPanel({
           <em>{allocationValidation.delta > 0 ? '超出 100%' : '未满 100%'}</em>
         )}
         {allocationValidation.isBalanced && <CheckCircle2 size={16} aria-hidden="true" />}
+        <button
+          type="button"
+          className="button secondary portfolio-editor-total-action"
+          onClick={normalizeAllocationsToHundred}
+          disabled={!draft.allocations.length || allocationValidation.isBalanced}
+        >
+          按当前类别归一到 100%
+        </button>
       </div>
 
       <div className="portfolio-allocation-editor">
+        <div className="portfolio-allocation-head" aria-hidden="true">
+          <span>资产类别</span>
+          <span>目标比例</span>
+          <span>偏离阈值</span>
+          <span>操作</span>
+        </div>
         {draft.allocations.map((row, index) => (
           <div key={`${row.assetClassId}-${index}`} className="portfolio-allocation-row">
             <select
@@ -272,6 +293,18 @@ export default function PortfolioEditorPanel({
         </button>
       </div>
 
+      <div className="portfolio-form portfolio-editor-description-form">
+        <Field label="组合说明" hint="可记录策略纪律、调仓频率或风险边界。">
+          <textarea
+            className="input portfolio-editor-description"
+            value={draft.description}
+            onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
+            placeholder="例如：长期持有，季度检查，偏离阈值触发再平衡。"
+            rows={3}
+          />
+        </Field>
+      </div>
+
       {(allocationValidation.errors.length > 0 || allocationValidation.warnings.length > 0) && (
         <div className="portfolio-detail-errors" role="alert">
           <span>校验提示</span>
@@ -283,5 +316,15 @@ export default function PortfolioEditorPanel({
         </div>
       )}
     </section>
+  );
+}
+
+function Field({ label, hint, children }) {
+  return (
+    <label className="portfolio-field">
+      <span>{label}</span>
+      {children}
+      {hint && <em>{hint}</em>}
+    </label>
   );
 }

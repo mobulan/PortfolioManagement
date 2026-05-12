@@ -258,7 +258,7 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, trans
         }
       ]
     };
-  }, [data, transactions, lineColor, primaryColor, upColor, chartColors, theme, hiddenGrandSeries, percentageData, range]);
+  }, [data, transactions, lineColor, primaryColor, upColor, chartColors, hiddenGrandSeries, percentageData, range]);
 
   const options = useMemo(() => {
     const colors = getChartThemeColors(theme);

@@ -10,14 +10,14 @@
 
 ## Overall Completion
 
-Estimated overall PRD completion: **about 65%**
+Estimated overall PRD completion: **about 72%**
 
 | Scope | Completion | Notes |
 | --- | ---: | --- |
 | Milestone 1: Repository and baseline | 100% | Git initialized, upstream preserved, origin configured and pushed. |
 | Milestone 2: Data core | 90% | Schema, storage keys, migrations, JSON import/export, calculations, transactions, snapshots, backtest helpers are present. |
-| Milestone 3: Usable portfolio management | 75% | Can create portfolios, edit metadata/allocation, add holdings, view dashboard, holdings, transactions, history, and backtest tab. |
-| Milestone 4: Dashboard and rebalance | 55% | Basic asset dashboard and rebalance suggestions exist; richer risk cards, charts, and actionable rebalance execution are pending. |
+| Milestone 3: Usable portfolio management | 82% | Can create/delete portfolios, edit metadata/allocation, add/remove holdings, search/select funds, and view dashboard, holdings, transactions, history, and backtest tab. |
+| Milestone 4: Dashboard and rebalance | 60% | Basic asset dashboard, empty states, and rebalance suggestions exist; richer risk cards, charts, and actionable rebalance execution are pending. |
 | Milestone 5: History and migration | 50% | Manual snapshots, JSON import/export, CSV helper layer, and legacy holdings preview exist; automatic snapshots, CSV UI, XLSM mapping, and group-level migration are pending. |
 | Milestone 6: Backtest and enhancements | 30% | Risk metric engine and manual value-series backtest UI exist; historical NAV-driven backtest, correlation UI, saved reports, AI analysis, and full Supabase QA are pending. |
 
@@ -65,6 +65,44 @@ Estimated overall PRD completion: **about 65%**
   - JSON import analysis and guarded apply
   - manual value-series backtest with saved result records
   - legacy holdings migration preview
+  - fund search suggestions while adding portfolio holdings
+  - amount-mode and share-mode holding entry
+  - portfolio deletion with cascading local cleanup
+  - soft removal of individual holdings
+
+## 2026-05-13 Progress Update
+
+Action plan for this pass:
+
+- Continue the P0 usability work already identified in the progress document.
+- Focus on portfolio-management UX rather than starting a new large subsystem.
+- Preserve the existing fund valuation workflow and keep changes scoped where possible.
+- Verify with smoke tests, lint, build, and `git diff --check`.
+
+Completed in this pass:
+
+- Added pure form helpers:
+  - `app/lib/portfolio/holdingForm.js`
+  - `app/lib/portfolio/editorForm.js`
+- Improved holding entry:
+  - local and remote fund search suggestions
+  - fund selection that can populate name and estimated NAV
+  - amount-mode entry for manual/cash-style market value
+  - share-mode entry for fund shares and NAV
+- Improved portfolio editor:
+  - clearer field labels and helper text
+  - currency selector
+  - template icons
+  - allocation table header
+  - one-click normalization of allocation percentages to 100%
+- Improved workspace usability:
+  - active portfolios are separated from archived/deleted state
+  - portfolio deletion cascades local portfolio records
+  - holding rows can be soft-removed
+  - overview and rebalance tabs now show empty-state guidance
+  - holdings layout has a wider single-column editing mode
+- Cleaned lint warnings in touched existing files, including React hook dependency warnings and TanStack Table compiler warnings.
+- Extended `scripts/portfolio-smoke-test.mjs` for holding form matching, amount/share modes, and allocation normalization.
 
 ### Test And Verification
 
@@ -73,14 +111,13 @@ Verified commands:
 - `node scripts\portfolio-smoke-test.mjs`: passed
 - `node scripts\portfolio-transaction-smoke-test.mjs`: passed
 - `node scripts\portfolio-import-smoke-test.mjs`: passed
-- `npm run lint`: passed with warnings only
+- `npm run lint`: passed with 0 reported problems in the 2026-05-13 verification run
 - `npm run build`: passed
 - `git diff --check`: passed with CRLF normalization warnings only
 
 Known verification notes:
 
 - `npm` is available through the conda `fund` environment.
-- `npm run lint` still reports warnings in pre-existing upstream areas such as hook dependencies and TanStack Table React Compiler compatibility. No lint errors remain.
 - Node smoke scripts still print `MODULE_TYPELESS_PACKAGE_JSON` warnings because package metadata does not declare `"type": "module"` while the portfolio modules use ESM syntax.
 
 ## Remaining PRD Gaps
@@ -89,7 +126,7 @@ Known verification notes:
 
 - Add a transaction baseline snapshot model before enabling destructive transaction delete/rebuild in UI.
 - Add actionable forced-rebalance list and a safe path from rebalance advice to generated transactions.
-- Add clearer user-facing validation for malformed holdings, invalid ratios, and import conflicts.
+- Add clearer user-facing validation for import conflicts and transaction edit/delete operations.
 - Complete group-level migration from existing `groupHoldings`.
 - Add automatic daily snapshot option.
 

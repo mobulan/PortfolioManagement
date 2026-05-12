@@ -33,6 +33,10 @@ node scripts/portfolio-import-smoke-test.mjs
 | CSV conflict modes | Import conflict mode definitions expose skip, overwrite, and merge. | Stable ids and descriptions are available for UI wiring without touching storage. | Automated |
 | CSV export helpers | Holdings, transactions, and snapshots export with stable headers and escaped cells. | CSV output preserves quoted commas and JSON asset-class values. | Automated |
 | Legacy holdings migration | Previewing legacy `holdings` from existing funds skips blank codes and fund codes already present in portfolio holdings. | Preview returns one migratable holding, two skipped entries, normalized cost data, and leaves existing holdings unchanged. | Automated |
+| Holding form fund matching | Holding form helper matches local fund records and search result records by code or name. | Fund code, name, estimated NAV, and current NAV normalize into a candidate object. | Automated |
+| Holding form amount mode | Manual/amount-mode holding entry records current market value directly. | Manual value is preserved and portfolio profit uses market value minus cost. | Automated |
+| Holding form share mode | Fund/share-mode holding entry derives value from share and NAV. | Fund name is matched from candidates, total value uses shares times estimated NAV, and daily estimate uses NAV delta. | Automated |
+| Allocation normalization | Editor helper normalizes arbitrary allocation percentages to exactly 100%. | Existing ratios are preserved proportionally; blank rows are equalized. | Automated |
 | Backtest helpers | Representative value series and correlation inputs produce finite metrics. | Annualized return, volatility, max drawdown are finite; perfect correlation is near 1. | Automated |
 
 ## Manual And Integration Follow-Up
@@ -40,7 +44,7 @@ node scripts/portfolio-import-smoke-test.mjs
 | Area | Case | Expected result | Owner note |
 | --- | --- | --- | --- |
 | UI portfolio editor | Create permanent portfolio from the UI. | Four target allocation rows render and can be saved without corrupting ratios. | Requires Agent E UI surface. |
-| UI holdings | Add multiple funds under one asset class. | Dashboard and detail views show both holdings and one aggregated sleeve. | Requires Agent E/G UI surface. |
+| UI holdings | Add multiple funds under one asset class. | Dashboard and detail views show both holdings and one aggregated sleeve. | Basic UI exists; needs browser-level regression coverage. |
 | UI transactions | Enter buy, sell, cash in, and cash out from forms. | Form validation prevents missing portfolio/holding IDs and updates principal history. | Requires Agent F/E surface. |
 | UI rebalance | Trigger rebalance view for a drifted portfolio. | Buy/sell suggestions match calculation engine amounts and thresholds. | Requires Agent E/G surface. |
 | Import/export UI | Export JSON, re-import it, and inspect state. | User-facing import reports filtered invalid records and preserves valid records. | Requires Agent H/E surface. |
@@ -52,5 +56,5 @@ node scripts/portfolio-import-smoke-test.mjs
 - `node scripts/portfolio-smoke-test.mjs` passes but emits Node's `MODULE_TYPELESS_PACKAGE_JSON` warning because `package.json` does not declare `"type": "module"` while portfolio library files use ESM syntax.
 - PowerShell command startup emits a local profile execution-policy warning in this environment. It does not fail the commands, but it adds noise to verification output.
 - Import normalization filters invalid relationships silently. This is safe for data integrity, but user-facing import screens may need counts or warnings so users understand what was dropped.
-- Legacy migration preview is automated at the pure-helper layer. `PortfolioMigrationPanel` is intentionally not wired into `PortfolioWorkspace` in this stage, so end-to-end UI migration remains a follow-up.
-- The current automated smoke validates pure modules only; UI wiring, storage persistence, and sync behavior still need integration tests after those agents finish.
+- Legacy migration preview is automated at the pure-helper layer and wired into the workspace, but group-level migration still needs coverage.
+- The current automated smoke validates pure modules only; browser-level UI behavior, storage persistence, and sync behavior still need integration tests.

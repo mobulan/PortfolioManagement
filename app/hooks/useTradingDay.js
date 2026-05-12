@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { nowInTz, formatDate } from '../lib/fundHelpers';
 import { fetchShanghaiIndexDate } from '../api/fund';
 
@@ -12,7 +12,7 @@ import { fetchShanghaiIndexDate } from '../api/fund';
 export function useTradingDay() {
   const [isTradingDay, setIsTradingDay] = useState(true); // 默认为交易日，通过接口校正
 
-  const checkTradingDay = async () => {
+  const checkTradingDay = useCallback(async () => {
     const todayStr = formatDate();
     const now = nowInTz();
     const isWeekend = now.day() === 0 || now.day() === 6;
@@ -46,15 +46,14 @@ export function useTradingDay() {
     } catch (e) {
       setIsTradingDay(!isWeekend);
     }
-  };
+  }, []);
 
   useEffect(() => {
     checkTradingDay();
     // 每30分钟检查一次
     const timer = setInterval(checkTradingDay, 60000 * 30);
     return () => clearInterval(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [checkTradingDay]);
 
   return { isTradingDay };
 }

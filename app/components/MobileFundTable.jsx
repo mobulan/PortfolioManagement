@@ -833,7 +833,7 @@ export default function MobileFundTable({
   const NAME_CELL_WIDTH = 140;
   const GAP = 12;
   const LAST_COLUMN_EXTRA = 12;
-  const FALLBACK_WIDTHS = {
+  const FALLBACK_WIDTHS = useMemo(() => ({
     fundName: 140,
     [EDIT_MOVE_TO_FRONT_COL]: 72,
     [EDIT_DRAG_COL]: 72,
@@ -856,7 +856,7 @@ export default function MobileFundTable({
     holdingProfit: 80,
     holdingCost: 80,
     costNav: 64,
-  };
+  }), []);
 
   const relatedSectorEnabled = mobileColumnVisibility?.relatedSector !== false;
   const relatedSectorCacheRef = useRef(new Map());
@@ -1082,7 +1082,7 @@ export default function MobileFundTable({
       return { ...FALLBACK_WIDTHS, fundName: NAME_CELL_WIDTH + w };
     }
     return { ...FALLBACK_WIDTHS };
-  }, [tableContainerWidth, mobileColumnOrder, mobileColumnVisibility, isEditMode]);
+  }, [tableContainerWidth, mobileColumnOrder, mobileColumnVisibility, isEditMode, FALLBACK_WIDTHS]);
 
   const handleResetMobileColumnOrder = () => {
     setMobileColumnOrder([...MOBILE_NON_FROZEN_COLUMN_IDS]);
@@ -1989,8 +1989,6 @@ export default function MobileFundTable({
       },
     ],
     [
-      currentTab,
-      favorites,
       columnWidthMap,
       showFullFundName,
       getFundCardProps,
@@ -2007,7 +2005,6 @@ export default function MobileFundTable({
       masked,
       onReorder,
       data,
-      selectableCodes,
       batchSelectableCount,
       setAllEditSelected,
       onFundTagsClick,
@@ -2111,7 +2108,8 @@ export default function MobileFundTable({
       return;
     }
     const gap = 12;
-    const widths = headerGroup.headers.map((h) => h.column.columnDef.meta?.width ?? 80);
+    const headers = headerGroup.headers;
+    const widths = headers.map((h) => h.column.columnDef.meta?.width ?? 80);
     if (widths.length > 0) widths[widths.length - 1] += LAST_COLUMN_EXTRA;
     const positions = [0];
     let acc = 0;
@@ -2122,7 +2120,7 @@ export default function MobileFundTable({
       positions.push(acc);
     }
     snapPositionsRef.current = positions;
-  }, [headerGroup?.headers?.length, columnWidthMap, mobileColumnOrder, isEditMode]);
+  }, [headerGroup?.headers, columnWidthMap, mobileColumnOrder, isEditMode]);
 
   useEffect(() => {
     const el = tableContainerRef.current;
