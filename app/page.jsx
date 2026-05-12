@@ -98,6 +98,7 @@ import FundTagsEditDialog from './components/FundTagsEditDialog';
 import { TAG_THEME_OPTIONS } from './components/AddTagDialog';
 import MobileBottomNav from './components/MobileBottomNav';
 import MineTab from './components/MineTab';
+import PortfolioWorkspace from './components/portfolio/PortfolioWorkspace';
 import SearchFund from './components/SearchFund';
 import MyEarningsCalendarPage from './components/MyEarningsCalendarPage';
 import { useFundFuzzyMatcher } from './hooks/useFundFuzzyMatcher';
@@ -190,11 +191,18 @@ export default function HomePage() {
     dcaPlans, setDcaPlans,
     customSettings, setCustomSettings,
     fundDailyEarnings, setFundDailyEarnings,
+    portfolios, setPortfolios,
+    portfolioHoldings, setPortfolioHoldings,
+    portfolioTransactions, setPortfolioTransactions,
+    portfolioPrincipalRecords, setPortfolioPrincipalRecords,
+    portfolioSnapshots, setPortfolioSnapshots,
+    portfolioBacktests, setPortfolioBacktests,
+    portfolioSettings, setPortfolioSettings,
     initCollapsed, initRefreshMs,
     initHoldings, initGroupHoldings,
     initPendingTrades, initTransactions,
     initDcaPlans, initCustomSettings,
-    initFundDailyEarnings,
+    initFundDailyEarnings, initPortfolioData,
     sortBy, setSortBy,
     sortOrder, setSortOrder,
     pcSortDisplayMode, setPcSortDisplayMode,
@@ -3289,6 +3297,7 @@ export default function HomePage() {
       initDcaPlans();
       initCustomSettings();
       initFundDailyEarnings();
+      initPortfolioData();
       try {        // 已登录用户：不在此处调用 refreshAll，等 fetchCloudConfig 完成后由 applyCloudConfig 统一刷新
         let shouldRefreshFromLocal = true;
         if (isSupabaseConfigured) {
@@ -3366,6 +3375,7 @@ export default function HomePage() {
       if (
         savedTab === 'all' ||
         savedTab === 'fav' ||
+        savedTab === 'portfolio' ||
         (savedTab && Array.isArray(groups) && groups.some((g) => g?.id === savedTab))
       ) {
         setCurrentTab(savedTab);
@@ -5179,6 +5189,20 @@ export default function HomePage() {
       if (!keys || keys.has('tags')) {
         all.tags = storageStore.getItem('tags', []);
       }
+      [
+        'portfolios',
+        'portfolioHoldings',
+        'portfolioTransactions',
+        'portfolioPrincipalRecords',
+        'portfolioSnapshots',
+        'portfolioBacktests',
+        'portfolioSettings',
+        'portfolioSchemaVersion',
+      ].forEach((key) => {
+        if (!keys || keys.has(key)) {
+          all[key] = storageStore.getItem(key, key === 'portfolioSchemaVersion' ? 1 : key === 'portfolioSettings' ? {} : []);
+        }
+      });
       // fundTagLists 已废弃：基金-标签归属仅由 tags.fundCodes 推导
 
       // 如果是全量收集（keys 为 null），进行完整的数据清洗和验证逻辑
@@ -5353,7 +5377,15 @@ export default function HomePage() {
           transactions: all.transactions,
           dcaPlans: cleanedDcaPlans,
           customSettings: isPlainObject(all.customSettings) ? all.customSettings : {},
-          fundDailyEarnings: cleanedFundDailyEarnings
+          fundDailyEarnings: cleanedFundDailyEarnings,
+          portfolios: Array.isArray(all.portfolios) ? all.portfolios : [],
+          portfolioHoldings: Array.isArray(all.portfolioHoldings) ? all.portfolioHoldings : [],
+          portfolioTransactions: Array.isArray(all.portfolioTransactions) ? all.portfolioTransactions : [],
+          portfolioPrincipalRecords: Array.isArray(all.portfolioPrincipalRecords) ? all.portfolioPrincipalRecords : [],
+          portfolioSnapshots: Array.isArray(all.portfolioSnapshots) ? all.portfolioSnapshots : [],
+          portfolioBacktests: Array.isArray(all.portfolioBacktests) ? all.portfolioBacktests : [],
+          portfolioSettings: isPlainObject(all.portfolioSettings) ? all.portfolioSettings : {},
+          portfolioSchemaVersion: Number(all.portfolioSchemaVersion) || 1
         };
       }
 
@@ -5377,6 +5409,14 @@ export default function HomePage() {
         transactions: {},
         dcaPlans: { [DCA_SCOPE_GLOBAL]: {} },
         customSettings: {},
+        portfolios: [],
+        portfolioHoldings: [],
+        portfolioTransactions: [],
+        portfolioPrincipalRecords: [],
+        portfolioSnapshots: [],
+        portfolioBacktests: [],
+        portfolioSettings: {},
+        portfolioSchemaVersion: 1,
         exportedAt: nowInTz().toISOString()
       };
     }
@@ -5601,6 +5641,28 @@ export default function HomePage() {
         return acc;
       }, {});
       setFundDailyEarnings(nextFundDailyEarnings);
+
+      if (hasOwn(cloudData, 'portfolios')) {
+        setPortfolios(Array.isArray(cloudData.portfolios) ? cloudData.portfolios : []);
+      }
+      if (hasOwn(cloudData, 'portfolioHoldings')) {
+        setPortfolioHoldings(Array.isArray(cloudData.portfolioHoldings) ? cloudData.portfolioHoldings : []);
+      }
+      if (hasOwn(cloudData, 'portfolioTransactions')) {
+        setPortfolioTransactions(Array.isArray(cloudData.portfolioTransactions) ? cloudData.portfolioTransactions : []);
+      }
+      if (hasOwn(cloudData, 'portfolioPrincipalRecords')) {
+        setPortfolioPrincipalRecords(Array.isArray(cloudData.portfolioPrincipalRecords) ? cloudData.portfolioPrincipalRecords : []);
+      }
+      if (hasOwn(cloudData, 'portfolioSnapshots')) {
+        setPortfolioSnapshots(Array.isArray(cloudData.portfolioSnapshots) ? cloudData.portfolioSnapshots : []);
+      }
+      if (hasOwn(cloudData, 'portfolioBacktests')) {
+        setPortfolioBacktests(Array.isArray(cloudData.portfolioBacktests) ? cloudData.portfolioBacktests : []);
+      }
+      if (hasOwn(cloudData, 'portfolioSettings')) {
+        setPortfolioSettings(isPlainObject(cloudData.portfolioSettings) ? cloudData.portfolioSettings : {});
+      }
 
       if (isPlainObject(cloudData.customSettings)) {
         try {
@@ -5852,6 +5914,14 @@ export default function HomePage() {
         dcaPlans,
         customSettings: customSettings || {},
         fundDailyEarnings,
+        portfolios,
+        portfolioHoldings,
+        portfolioTransactions,
+        portfolioPrincipalRecords,
+        portfolioSnapshots,
+        portfolioBacktests,
+        portfolioSettings,
+        portfolioSchemaVersion: 1,
         exportedAt: nowInTz().toISOString()
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -6117,6 +6187,14 @@ export default function HomePage() {
           } catch { }
         }
 
+        if (Array.isArray(data.portfolios)) setPortfolios(data.portfolios);
+        if (Array.isArray(data.portfolioHoldings)) setPortfolioHoldings(data.portfolioHoldings);
+        if (Array.isArray(data.portfolioTransactions)) setPortfolioTransactions(data.portfolioTransactions);
+        if (Array.isArray(data.portfolioPrincipalRecords)) setPortfolioPrincipalRecords(data.portfolioPrincipalRecords);
+        if (Array.isArray(data.portfolioSnapshots)) setPortfolioSnapshots(data.portfolioSnapshots);
+        if (Array.isArray(data.portfolioBacktests)) setPortfolioBacktests(data.portfolioBacktests);
+        if (isPlainObject(data.portfolioSettings)) setPortfolioSettings(data.portfolioSettings);
+
         // 导入成功后，仅刷新新追加的基金
         if (appendedCodes.length) {
           // 这里需要确保 refreshAll 不会因为闭包问题覆盖掉刚刚合并好的 mergedFunds
@@ -6267,6 +6345,7 @@ export default function HomePage() {
 
   /** 移动端底部 Tab 切换时保留首页 DOM，用显隐代替卸载 */
   const mobileHomeTabVisible = !isMobile || mobileMainTab === 'home';
+  const mobilePortfolioTabVisible = isMobile && mobileMainTab === 'portfolio';
 
   /** PC / 移动端行、FundCard 共用：统一 name / fundName 后走单删逻辑 */
   const handleRemoveFundEntry = useCallback((rowOrFund) => {
@@ -6743,6 +6822,18 @@ export default function HomePage() {
                     >
                       自选 ({favorites.size})
                     </motion.button>
+                    <motion.button
+                      layout
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      key="portfolio"
+                      className={`tab ${currentTab === 'portfolio' ? 'active' : ''}`}
+                      onClick={() => startTransition(() => setCurrentTab('portfolio'))}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 1 }}
+                    >
+                      投资组合 ({portfolios.length})
+                    </motion.button>
                     {groups.map(g => (
                       <motion.button
                         layout
@@ -6781,7 +6872,7 @@ export default function HomePage() {
             <div
               className="sort-group"
               style={{
-                display: currentTab === SUMMARY_TAB_ID ? 'none' : 'flex',
+                display: currentTab === SUMMARY_TAB_ID || currentTab === 'portfolio' ? 'none' : 'flex',
                 alignItems: 'center',
                 gap: 12,
               }}
@@ -6916,7 +7007,25 @@ export default function HomePage() {
             </div>
           </div>
 
-          {scopedFunds.length === 0 &&
+          {currentTab === 'portfolio' ? (
+            <PortfolioWorkspace
+              funds={funds}
+              portfolios={portfolios}
+              setPortfolios={setPortfolios}
+              portfolioHoldings={portfolioHoldings}
+              setPortfolioHoldings={setPortfolioHoldings}
+              portfolioTransactions={portfolioTransactions}
+              setPortfolioTransactions={setPortfolioTransactions}
+              portfolioPrincipalRecords={portfolioPrincipalRecords}
+              setPortfolioPrincipalRecords={setPortfolioPrincipalRecords}
+              portfolioSnapshots={portfolioSnapshots}
+              setPortfolioSnapshots={setPortfolioSnapshots}
+              portfolioBacktests={portfolioBacktests}
+              setPortfolioBacktests={setPortfolioBacktests}
+              portfolioSettings={portfolioSettings}
+              setPortfolioSettings={setPortfolioSettings}
+            />
+          ) : scopedFunds.length === 0 &&
           !(currentTab === SUMMARY_TAB_ID && showPortfolioSummaryTab) ? (
             <EmptyStateCard
               fundsLength={funds.length}
@@ -7348,6 +7457,27 @@ export default function HomePage() {
         </div>
       </>
       </div>
+      {isMobile && mobilePortfolioTabVisible && (
+        <div className="mobile-main-tab-panel mobile-main-tab-panel--portfolio">
+          <PortfolioWorkspace
+            funds={funds}
+            portfolios={portfolios}
+            setPortfolios={setPortfolios}
+            portfolioHoldings={portfolioHoldings}
+            setPortfolioHoldings={setPortfolioHoldings}
+            portfolioTransactions={portfolioTransactions}
+            setPortfolioTransactions={setPortfolioTransactions}
+            portfolioPrincipalRecords={portfolioPrincipalRecords}
+            setPortfolioPrincipalRecords={setPortfolioPrincipalRecords}
+            portfolioSnapshots={portfolioSnapshots}
+            setPortfolioSnapshots={setPortfolioSnapshots}
+            portfolioBacktests={portfolioBacktests}
+            setPortfolioBacktests={setPortfolioBacktests}
+            portfolioSettings={portfolioSettings}
+            setPortfolioSettings={setPortfolioSettings}
+          />
+        </div>
+      )}
       {isMobile && (
         <MineTab
           visible={mobileMainTab === 'mine'}

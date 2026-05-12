@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, LayoutGroup, useReducedMotion, AnimatePresence } from 'framer-motion';
-import { Home, User } from 'lucide-react';
+import { Home, PieChart, User } from 'lucide-react';
 
 const TABS = [
   { id: 'home', label: '首页', Icon: Home },
+  { id: 'portfolio', label: '组合', Icon: PieChart },
   { id: 'mine', label: '我的', Icon: User },
 ];
 

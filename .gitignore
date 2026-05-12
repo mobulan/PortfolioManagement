@@ -84,4 +84,7 @@ fabric.properties
 .env.local
 .DS_Store
 .idea/*
+.vercel/
+.cursor/
+.trae/
 .husky/_/

@@ -51,7 +51,10 @@ const SYNC_KEYS = new Set([
   'funds', 'tags', 'favorites', 'groups', 
   'collapsedCodes', 'collapsedTrends', 'collapsedEarnings', 
   'refreshMs', 'holdings', 'groupHoldings', 'pendingTrades', 
-  'transactions', 'dcaPlans', 'customSettings', 'fundDailyEarnings'
+  'transactions', 'dcaPlans', 'customSettings', 'fundDailyEarnings',
+  'portfolios', 'portfolioHoldings', 'portfolioTransactions',
+  'portfolioPrincipalRecords', 'portfolioSnapshots', 'portfolioBacktests',
+  'portfolioSettings', 'portfolioSchemaVersion'
 ]);
 
 /** 排序展示模式的合法值集合 */
@@ -102,6 +105,14 @@ export const useStorageStore = create((set, get) => ({
   dcaPlans: {},
   customSettings: {},
   fundDailyEarnings: {},
+  portfolios: [],
+  portfolioHoldings: [],
+  portfolioTransactions: [],
+  portfolioPrincipalRecords: [],
+  portfolioSnapshots: [],
+  portfolioBacktests: [],
+  portfolioSettings: {},
+  portfolioSchemaVersion: 1,
 
   // 排序相关状态
   sortBy: 'default',
@@ -185,6 +196,21 @@ export const useStorageStore = create((set, get) => ({
         }
       }
       set({ fundDailyEarnings: parsed });
+    }
+  },
+
+  initPortfolioData: () => {
+    if (typeof window !== 'undefined') {
+      set({
+        portfolios: get().getItem('portfolios', []),
+        portfolioHoldings: get().getItem('portfolioHoldings', []),
+        portfolioTransactions: get().getItem('portfolioTransactions', []),
+        portfolioPrincipalRecords: get().getItem('portfolioPrincipalRecords', []),
+        portfolioSnapshots: get().getItem('portfolioSnapshots', []),
+        portfolioBacktests: get().getItem('portfolioBacktests', []),
+        portfolioSettings: get().getItem('portfolioSettings', {}),
+        portfolioSchemaVersion: Number(get().getItem('portfolioSchemaVersion', 1)) || 1,
+      });
     }
   },
 
@@ -402,6 +428,48 @@ export const useStorageStore = create((set, get) => ({
     get().setItem('fundDailyEarnings', JSON.stringify(next));
   },
 
+  setPortfolios: (nextPortfolios) => {
+    const next = typeof nextPortfolios === 'function' ? nextPortfolios(get().portfolios) : nextPortfolios;
+    set({ portfolios: next });
+    get().setItem('portfolios', JSON.stringify(next));
+  },
+
+  setPortfolioHoldings: (nextPortfolioHoldings) => {
+    const next = typeof nextPortfolioHoldings === 'function' ? nextPortfolioHoldings(get().portfolioHoldings) : nextPortfolioHoldings;
+    set({ portfolioHoldings: next });
+    get().setItem('portfolioHoldings', JSON.stringify(next));
+  },
+
+  setPortfolioTransactions: (nextPortfolioTransactions) => {
+    const next = typeof nextPortfolioTransactions === 'function' ? nextPortfolioTransactions(get().portfolioTransactions) : nextPortfolioTransactions;
+    set({ portfolioTransactions: next });
+    get().setItem('portfolioTransactions', JSON.stringify(next));
+  },
+
+  setPortfolioPrincipalRecords: (nextPortfolioPrincipalRecords) => {
+    const next = typeof nextPortfolioPrincipalRecords === 'function' ? nextPortfolioPrincipalRecords(get().portfolioPrincipalRecords) : nextPortfolioPrincipalRecords;
+    set({ portfolioPrincipalRecords: next });
+    get().setItem('portfolioPrincipalRecords', JSON.stringify(next));
+  },
+
+  setPortfolioSnapshots: (nextPortfolioSnapshots) => {
+    const next = typeof nextPortfolioSnapshots === 'function' ? nextPortfolioSnapshots(get().portfolioSnapshots) : nextPortfolioSnapshots;
+    set({ portfolioSnapshots: next });
+    get().setItem('portfolioSnapshots', JSON.stringify(next));
+  },
+
+  setPortfolioBacktests: (nextPortfolioBacktests) => {
+    const next = typeof nextPortfolioBacktests === 'function' ? nextPortfolioBacktests(get().portfolioBacktests) : nextPortfolioBacktests;
+    set({ portfolioBacktests: next });
+    get().setItem('portfolioBacktests', JSON.stringify(next));
+  },
+
+  setPortfolioSettings: (nextPortfolioSettings) => {
+    const next = typeof nextPortfolioSettings === 'function' ? nextPortfolioSettings(get().portfolioSettings) : nextPortfolioSettings;
+    set({ portfolioSettings: next });
+    get().setItem('portfolioSettings', JSON.stringify(next));
+  },
+
   /**
    * 核心写入方法：同步更新 localStorage 和 Store 状态，并触发同步
    * @param {string} key 
@@ -444,11 +512,20 @@ export const useStorageStore = create((set, get) => ({
       else if (key === 'dcaPlans') set({ dcaPlans: parsed });
       else if (key === 'customSettings') set({ customSettings: parsed });
       else if (key === 'fundDailyEarnings') set({ fundDailyEarnings: parsed });
+      else if (key === 'portfolios') set({ portfolios: parsed });
+      else if (key === 'portfolioHoldings') set({ portfolioHoldings: parsed });
+      else if (key === 'portfolioTransactions') set({ portfolioTransactions: parsed });
+      else if (key === 'portfolioPrincipalRecords') set({ portfolioPrincipalRecords: parsed });
+      else if (key === 'portfolioSnapshots') set({ portfolioSnapshots: parsed });
+      else if (key === 'portfolioBacktests') set({ portfolioBacktests: parsed });
+      else if (key === 'portfolioSettings') set({ portfolioSettings: parsed });
+      else if (key === 'portfolioSchemaVersion') set({ portfolioSchemaVersion: Number(parsed) || 1 });
       else if (key === 'localSortBy') set({ sortBy: parsed });
       else if (key === 'localSortOrder') set({ sortOrder: parsed });
     } catch (e) {
       // 如果不是 JSON，或者是 refreshMs 这种数字字符串
       if (key === 'refreshMs') set({ refreshMs: Number(value) });
+      else if (key === 'portfolioSchemaVersion') set({ portfolioSchemaVersion: Number(value) || 1 });
       else if (key === 'localSortBy') set({ sortBy: value });
       else if (key === 'localSortOrder') set({ sortOrder: value });
     }
