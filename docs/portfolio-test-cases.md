@@ -9,6 +9,10 @@ Automated script:
 ```bash
 node scripts/portfolio-smoke-test.mjs
 node scripts/portfolio-import-smoke-test.mjs
+node scripts/portfolio-transaction-smoke-test.mjs
+node scripts/portfolio-dashboard-smoke-test.mjs
+node scripts/portfolio-migration-smoke-test.mjs
+node scripts/portfolio-snapshot-smoke-test.mjs
 ```
 
 ## Automated Smoke Coverage
@@ -35,6 +39,9 @@ node scripts/portfolio-import-smoke-test.mjs
 | CSV conflict modes | Import conflict mode definitions expose skip, overwrite, and merge. | Stable ids and descriptions are available for UI wiring without touching storage. | Automated |
 | CSV export helpers | Holdings, transactions, and snapshots export with stable headers and escaped cells. | CSV output preserves quoted commas and JSON asset-class values. | Automated |
 | Legacy holdings migration | Previewing legacy `holdings` from existing funds skips blank codes and fund codes already present in portfolio holdings. | Preview returns one migratable holding, two skipped entries, normalized cost data, and leaves existing holdings unchanged. | Automated |
+| Group holdings migration | Previewing `groupHoldings` into a target portfolio skips duplicate, empty, and invalid holdings. | Preview returns migratable holdings plus skipped row details without writing storage. | Automated |
+| Automatic daily snapshot | Enabled snapshot settings create an idempotent daily snapshot proposal. | Disabled settings skip, first enabled run appends, duplicate same-day run skips, overwrite mode only replaces the matching row in pure helper tests. | Automated |
+| Dashboard risk metrics | Snapshots, summary, and holdings produce trend, contribution, and alert summaries. | Helper returns finite trend values, contribution rows, overweight/drift alerts, and empty-safe defaults. | Automated |
 | Holding form fund matching | Holding form helper matches local fund records and search result records by code or name. | Fund code, name, estimated NAV, and current NAV normalize into a candidate object. | Automated |
 | Holding form amount mode | Manual/amount-mode holding entry records current market value directly. | Manual value is preserved and portfolio profit uses market value minus cost. | Automated |
 | Holding form share mode | Fund/share-mode holding entry derives value from share and NAV. | Fund name is matched from candidates, total value uses shares times estimated NAV, and daily estimate uses NAV delta. | Automated |
@@ -49,8 +56,9 @@ node scripts/portfolio-import-smoke-test.mjs
 | UI holdings | Add multiple funds under one asset class. | Dashboard and detail views show both holdings and one aggregated sleeve. | Basic UI exists; needs browser-level regression coverage. |
 | UI transactions | Enter buy, sell, cash in, cash out, delete a baseline-backed transaction, and rebuild ledger. | Form validation prevents missing portfolio/holding IDs; delete/rebuild uses captured baseline and updates principal history. | Basic UI exists; needs browser-level regression coverage. |
 | UI rebalance | Trigger rebalance view for a drifted portfolio and apply generated drafts. | Buy/sell suggestions match calculation engine amounts and generated drafts use the existing transaction engine. | Basic UI exists; needs browser-level regression coverage. |
-| Import/export UI | Export JSON, re-import it, and inspect state. | User-facing import reports filtered invalid records and preserves valid records. | Requires Agent H/E surface. |
-| Migration UI | Preview legacy fund holdings, run migration, then preview again. | First preview shows migratable holdings; after migration, duplicate fund codes are skipped and no duplicate portfolio holdings are created. | Requires migration panel integration into a future workspace pass. |
+| Import/export UI | Export JSON, re-import it, analyze/apply CSV, and inspect state. | User-facing import reports filtered invalid records, CSV panel honors conflict mode, and valid records persist. | Basic UI exists; needs browser-level regression coverage. |
+| Migration UI | Preview legacy and grouped fund holdings, run migration, then preview again. | First preview shows migratable holdings; after migration, duplicate fund codes are skipped and no duplicate portfolio holdings are created. | Basic UI exists; needs browser-level regression coverage. |
+| Automatic snapshot UI | Enable automatic daily snapshot, reload/open portfolio, and inspect snapshots. | One snapshot is created for the current date and repeat renders do not duplicate same-day rows. | Basic UI exists; needs browser-level regression coverage. |
 | Error states | Submit negative shares, non-numeric NAV, missing fund code, and orphan relationships. | UI blocks or normalizes consistently and communicates the result. | Requires production validation decisions. |
 
 ## Current Risks Observed By Agent I
@@ -58,5 +66,5 @@ node scripts/portfolio-import-smoke-test.mjs
 - `node scripts/portfolio-smoke-test.mjs` passes but emits Node's `MODULE_TYPELESS_PACKAGE_JSON` warning because `package.json` does not declare `"type": "module"` while portfolio library files use ESM syntax.
 - PowerShell command startup emits a local profile execution-policy warning in this environment. It does not fail the commands, but it adds noise to verification output.
 - Import normalization filters invalid relationships silently. This is safe for data integrity, but user-facing import screens may need counts or warnings so users understand what was dropped.
-- Legacy migration preview is automated at the pure-helper layer and wired into the workspace, but group-level migration still needs coverage.
+- Legacy and group migration previews are automated at the pure-helper layer and wired into the workspace; browser-level migration coverage is still pending.
 - The current automated smoke validates pure modules only; browser-level UI behavior, storage persistence, and sync behavior still need integration tests.

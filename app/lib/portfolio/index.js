@@ -3,6 +3,7 @@ export * from './calculations.js';
 export * from './rebalance.js';
 export * from './transactionEngine.js';
 export * from './snapshot.js';
+export * from './dashboardRisk.js';
 export * from './importExport.js';
 export * from './backtest.js';
 export * from './migrations.js';

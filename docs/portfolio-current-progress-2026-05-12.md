@@ -10,16 +10,16 @@
 
 ## Overall Completion
 
-Estimated overall PRD completion: **about 76%**
+Estimated overall PRD completion: **about 82%**
 
 | Scope | Completion | Notes |
 | --- | ---: | --- |
 | Milestone 1: Repository and baseline | 100% | Git initialized, upstream preserved, origin configured and pushed. |
 | Milestone 2: Data core | 90% | Schema, storage keys, migrations, JSON import/export, calculations, transactions, snapshots, backtest helpers are present. |
 | Milestone 3: Usable portfolio management | 85% | Can create/delete portfolios, edit metadata/allocation, add/remove holdings, search/select funds, delete/rebuild baseline-backed transactions, and view dashboard, holdings, transactions, history, and backtest tab. |
-| Milestone 4: Dashboard and rebalance | 68% | Basic asset dashboard, empty states, rebalance suggestions, and executable rebalance transaction drafts exist; richer risk cards and charts are pending. |
-| Milestone 5: History and migration | 50% | Manual snapshots, JSON import/export, CSV helper layer, and legacy holdings preview exist; automatic snapshots, CSV UI, XLSM mapping, and group-level migration are pending. |
-| Milestone 6: Backtest and enhancements | 30% | Risk metric engine and manual value-series backtest UI exist; historical NAV-driven backtest, correlation UI, saved reports, AI analysis, and full Supabase QA are pending. |
+| Milestone 4: Dashboard and rebalance | 78% | Basic asset dashboard, empty states, rebalance suggestions, executable rebalance transaction drafts, and risk/contribution summary are wired; richer charts are pending. |
+| Milestone 5: History and migration | 70% | Manual snapshots, automatic daily snapshot option, JSON import/export, CSV helper layer/UI, legacy holdings preview, and group-level migration preview exist; XLSM mapping is pending. |
+| Milestone 6: Backtest and enhancements | 35% | Risk metric engine and manual value-series backtest UI exist; historical NAV-driven backtest, correlation UI, saved reports, AI analysis, and full Supabase QA are pending. |
 
 ## Completed Capabilities
 
@@ -56,6 +56,7 @@ Estimated overall PRD completion: **about 76%**
   - `PortfolioMigrationPanel.jsx`
   - `PortfolioTransactionsPanel.jsx`
   - `PortfolioBacktestPanel.jsx`
+  - `PortfolioCsvImportPanel.jsx`
 - The workspace now supports:
   - portfolio overview
   - holdings table
@@ -65,6 +66,10 @@ Estimated overall PRD completion: **about 76%**
   - JSON import analysis and guarded apply
   - manual value-series backtest with saved result records
   - legacy holdings migration preview
+  - group-level holdings migration preview
+  - automatic daily snapshot toggle
+  - CSV import/export panel for holdings, transactions, and snapshots
+  - overview risk alerts, contribution/trend summary, and drawdown summary
   - fund search suggestions while adding portfolio holdings
   - amount-mode and share-mode holding entry
   - portfolio deletion with cascading local cleanup
@@ -125,14 +130,11 @@ Known verification notes:
 ### P0 / Near-Term
 
 - Add clearer user-facing validation for import conflicts and transaction edit/delete operations.
-- Complete group-level migration from existing `groupHoldings`.
-- Add automatic daily snapshot option.
 
 ### P1
 
-- Add dashboard trend charts, contribution analysis, risk alerts, portfolio cards, and richer visual summaries.
-- Wire CSV import/export UI around the completed helper layer.
-- Add CSV conflict resolution UX for `skip`, `overwrite`, and `merge`.
+- Add dashboard trend charts, portfolio cards, and richer visual summaries.
+- Improve CSV conflict resolution UX for `skip`, `overwrite`, and `merge` with clearer per-row conflict previews.
 - Add XLSM/Excel field mapping.
 - Add historical NAV-driven backtest using fund codes and weights.
 - Add correlation matrix UI and saved backtest report view.
@@ -226,3 +228,36 @@ Verification:
 - `npm run lint`: passed
 - `npm run build`: passed
 - `git diff --check`: passed with CRLF normalization warnings only
+
+## 2026-05-13 Parallel Agent Continuation
+
+Action plan for this pass:
+
+- Use parallel subagents for independent PRD gaps to avoid overloading one context window.
+- Keep subagent writes isolated, then do mainline integration in `PortfolioWorkspace`.
+- Update active progress and QA documents after implementation.
+
+Completed in this pass:
+
+- Agent Q added pure `previewGroupHoldingsMigration` plus `scripts/portfolio-migration-smoke-test.mjs`.
+- Agent R added pure `prepareAutomaticDailySnapshot` plus `scripts/portfolio-snapshot-smoke-test.mjs`.
+- Agent S added standalone `PortfolioCsvImportPanel.jsx`.
+- Agent T added `buildDashboardRiskMetrics` plus `scripts/portfolio-dashboard-smoke-test.mjs`.
+- Mainline integration now passes `groupHoldings` into the portfolio workspace.
+- Holdings tab now shows both legacy holdings migration and group holdings migration previews.
+- History tab now exposes an automatic daily snapshot toggle and keeps auto snapshot creation idempotent.
+- History sidebar now exposes CSV analyze/apply/export for holdings, transactions, and snapshots.
+- Overview tab now surfaces risk alert counts, snapshot count, latest value change, and max drawdown.
+
+Verification in this pass:
+
+- `npm run lint`: passed
+- `node scripts\portfolio-smoke-test.mjs`: passed
+- `node scripts\portfolio-import-smoke-test.mjs`: passed
+- `node scripts\portfolio-transaction-smoke-test.mjs`: passed
+- `node scripts\portfolio-dashboard-smoke-test.mjs`: passed
+- `node scripts\portfolio-migration-smoke-test.mjs`: passed
+- `node scripts\portfolio-snapshot-smoke-test.mjs`: passed
+- `npm run build`: passed
+- `git diff --check`: passed with CRLF normalization warnings only
+- `Invoke-WebRequest http://localhost:3000`: returned HTTP 200

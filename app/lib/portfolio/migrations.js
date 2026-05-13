@@ -66,6 +66,92 @@ export function previewLegacyHoldingsMigration({
   };
 }
 
+const getGroupHoldingEntries = (groupHoldings = {}, groupId) => {
+  if (!groupHoldings || typeof groupHoldings !== 'object') return [];
+  if (groupId) return [[String(groupId), groupHoldings[groupId] || {}]];
+  return Object.entries(groupHoldings);
+};
+
+const isEmptyLegacyHolding = (holding) => {
+  if (!holding || typeof holding !== 'object') return true;
+  const share = Number(holding.share);
+  return !Number.isFinite(share) || share <= 0;
+};
+
+export function previewGroupHoldingsMigration({
+  funds = [],
+  groupHoldings = {},
+  groupId = '',
+  existingPortfolioHoldings = [],
+  portfolioId = DEFAULT_MIGRATION_PORTFOLIO_ID,
+} = {}) {
+  const fundByCode = new Map((Array.isArray(funds) ? funds : [])
+    .map((fund) => [normalizeFundCode(fund?.code), fund])
+    .filter(([code]) => code));
+  const duplicateFundCodes = new Set();
+
+  (Array.isArray(existingPortfolioHoldings) ? existingPortfolioHoldings : []).forEach((holding) => {
+    if ((holding?.portfolioId || '') !== portfolioId) return;
+    const fundCode = normalizeFundCode(holding?.fundCode);
+    if (fundCode) duplicateFundCodes.add(fundCode);
+  });
+
+  const previewHoldings = [];
+  const skipped = [];
+
+  getGroupHoldingEntries(groupHoldings, groupId).forEach(([currentGroupId, bucket]) => {
+    Object.entries(bucket || {}).forEach(([rawCode, holding]) => {
+      const fundCode = normalizeFundCode(rawCode);
+      const skipBase = {
+        groupId: currentGroupId,
+        fundCode,
+      };
+
+      if (!fundCode) {
+        skipped.push({ ...skipBase, reason: 'empty_fund_code' });
+        return;
+      }
+
+      if (isEmptyLegacyHolding(holding)) {
+        skipped.push({ ...skipBase, reason: 'empty_holding' });
+        return;
+      }
+
+      if (duplicateFundCodes.has(fundCode)) {
+        skipped.push({ ...skipBase, reason: 'duplicate_fund_code' });
+        return;
+      }
+
+      duplicateFundCodes.add(fundCode);
+      const fund = fundByCode.get(fundCode);
+      const share = Number(holding?.share) || 0;
+      const cost = Number(holding?.cost) || 0;
+      previewHoldings.push(normalizePortfolioHolding({
+        id: createMigrationHoldingId(portfolioId, fundCode),
+        portfolioId,
+        assetClassId: 'equity',
+        instrumentType: 'fund',
+        fundCode,
+        fundName: fund?.name || fundCode,
+        share,
+        costPrice: cost,
+        costAmount: share * cost,
+        currentNav: Number(fund?.dwjz) || null,
+        estimatedNav: Number(fund?.gsz) || Number(fund?.dwjz) || null,
+      }));
+    });
+  });
+
+  return {
+    portfolioId,
+    groupId: groupId || '',
+    migratableCount: previewHoldings.length,
+    skippedCount: skipped.length,
+    holdings: previewHoldings,
+    skipped,
+  };
+}
+
 export function createDefaultPortfolioState({ funds = [], holdings = {}, existingPortfolios = [] } = {}) {
   if (Array.isArray(existingPortfolios) && existingPortfolios.length) {
     return {

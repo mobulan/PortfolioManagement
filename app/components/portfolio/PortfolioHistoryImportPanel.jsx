@@ -3,12 +3,12 @@
 import { ClipboardCheck, RefreshCw, Upload } from 'lucide-react';
 
 const importTypes = [
-  ['portfolios', '组合'],
-  ['portfolioHoldings', '持仓'],
-  ['portfolioTransactions', '交易'],
-  ['portfolioPrincipalRecords', '本金'],
-  ['portfolioSnapshots', '快照'],
-  ['portfolioBacktests', '回测'],
+  ['portfolios', 'Portfolios'],
+  ['portfolioHoldings', 'Holdings'],
+  ['portfolioTransactions', 'Transactions'],
+  ['portfolioPrincipalRecords', 'Principal'],
+  ['portfolioSnapshots', 'Snapshots'],
+  ['portfolioBacktests', 'Backtests'],
 ];
 
 const money = (value) => Number(value || 0).toLocaleString('zh-CN', {
@@ -26,6 +26,8 @@ export default function PortfolioHistoryImportPanel({
   analysis,
   onApplyImport,
   onRecordSnapshot,
+  snapshotAutoEnabled = false,
+  onSnapshotAutoEnabledChange,
 }) {
   const sortedSnapshots = [...snapshots].sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const latest = sortedSnapshots[0];
@@ -35,25 +37,35 @@ export default function PortfolioHistoryImportPanel({
 
   return (
     <section className="portfolio-panel glass">
-      <h3>快照与导入预览</h3>
+      <h3>Snapshots and JSON import</h3>
       <div className="portfolio-form">
-        <button type="button" className="button secondary" onClick={onRecordSnapshot}>
-          <RefreshCw size={16} />
-          记录今日快照
-        </button>
+        <div className="portfolio-inline-form">
+          <button type="button" className="button secondary" onClick={onRecordSnapshot}>
+            <RefreshCw size={16} />
+            Record today snapshot
+          </button>
+          <label className="muted">
+            <input
+              type="checkbox"
+              checked={snapshotAutoEnabled}
+              onChange={(event) => onSnapshotAutoEnabledChange?.(event.target.checked)}
+            />
+            Auto daily snapshot
+          </label>
+        </div>
         <div className="portfolio-summary-grid">
-          <Metric label="快照数" value={sortedSnapshots.length} />
-          <Metric label="区间变化" value={`¥${money(valueChange)}`} tone={valueChange >= 0 ? 'up' : 'down'} />
-          <Metric label="区间收益" value={percent(valueChangeRate)} tone={valueChangeRate >= 0 ? 'up' : 'down'} />
+          <Metric label="Snapshots" value={sortedSnapshots.length} />
+          <Metric label="Value change" value={`¥${money(valueChange)}`} tone={valueChange >= 0 ? 'up' : 'down'} />
+          <Metric label="Return" value={percent(valueChangeRate)} tone={valueChangeRate >= 0 ? 'up' : 'down'} />
         </div>
         <div className="portfolio-table-wrap">
           <table className="portfolio-table">
             <thead>
               <tr>
-                <th>日期</th>
-                <th>总资产</th>
-                <th>本金</th>
-                <th>收益</th>
+                <th>Date</th>
+                <th>Total value</th>
+                <th>Principal</th>
+                <th>Profit</th>
               </tr>
             </thead>
             <tbody>
@@ -66,7 +78,7 @@ export default function PortfolioHistoryImportPanel({
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={4}>暂无快照</td>
+                  <td colSpan={4}>No snapshots yet.</td>
                 </tr>
               )}
             </tbody>
@@ -76,12 +88,12 @@ export default function PortfolioHistoryImportPanel({
           className="portfolio-textarea"
           value={importText}
           onChange={(event) => onImportTextChange?.(event.target.value)}
-          placeholder="粘贴组合 JSON 后先分析，再确认导入"
+          placeholder="Paste portfolio JSON, analyze it, then apply valid records."
         />
         <div className="portfolio-inline-form">
           <button type="button" className="button secondary" onClick={onAnalyze}>
             <ClipboardCheck size={16} />
-            分析导入
+            Analyze JSON
           </button>
           <button
             type="button"
@@ -90,7 +102,7 @@ export default function PortfolioHistoryImportPanel({
             disabled={!analysis || (analysis.counts?.portfolios?.valid || 0) === 0}
           >
             <Upload size={16} />
-            应用有效记录
+            Apply valid records
           </button>
         </div>
         {analysis && (
@@ -98,9 +110,9 @@ export default function PortfolioHistoryImportPanel({
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>类型</th>
-                  <th>有效</th>
-                  <th>丢弃</th>
+                  <th>Type</th>
+                  <th>Valid</th>
+                  <th>Dropped</th>
                 </tr>
               </thead>
               <tbody>

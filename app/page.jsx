@@ -7023,6 +7023,7 @@ export default function HomePage() {
             <PortfolioWorkspace
               funds={funds}
               legacyHoldings={holdings}
+              groupHoldings={groupHoldings}
               portfolios={portfolios}
               setPortfolios={setPortfolios}
               portfolioHoldings={portfolioHoldings}
@@ -7477,6 +7478,7 @@ export default function HomePage() {
           <PortfolioWorkspace
             funds={funds}
             legacyHoldings={holdings}
+            groupHoldings={groupHoldings}
             portfolios={portfolios}
             setPortfolios={setPortfolios}
             portfolioHoldings={portfolioHoldings}

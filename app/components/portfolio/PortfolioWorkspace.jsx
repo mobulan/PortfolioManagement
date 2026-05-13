@@ -9,19 +9,27 @@ import {
   normalizePortfolioFundCandidate,
   calculatePortfolioSummary,
   aggregateDashboard,
+  buildDashboardRiskMetrics,
   calculateRebalancePlan,
   calculateSmartCashPlan,
   createRebalanceTransactionDrafts,
   applyPortfolioTransaction,
   createPortfolioTransactionBaseline,
   createPortfolioSnapshot,
+  prepareAutomaticDailySnapshot,
   exportPortfolioData,
+  exportPortfolioCsv,
   analyzePortfolioImport,
+  analyzePortfolioCsvImport,
+  CSV_IMPORT_TYPES,
+  PORTFOLIO_IMPORT_CONFLICT_MODES,
   previewLegacyHoldingsMigration,
+  previewGroupHoldingsMigration,
   rebuildPortfolioAfterTransactionDelete,
 } from '@/app/lib/portfolio';
 import { fetchFundData, searchFunds } from '@/app/api/fund';
 import PortfolioBacktestPanel from './PortfolioBacktestPanel';
+import PortfolioCsvImportPanel from './PortfolioCsvImportPanel';
 import PortfolioDetailTabs from './PortfolioDetailTabs';
 import PortfolioEditorPanel from './PortfolioEditorPanel';
 import PortfolioHistoryImportPanel from './PortfolioHistoryImportPanel';
@@ -40,9 +48,36 @@ const customPortfolioNumber = (name = '') => {
   return Number(match[1] || 1);
 };
 
+const isPresent = (value) => value != null && value !== '';
+
+const mergeImportedRecord = (current, imported) => Object.fromEntries(
+  Object.entries({ ...current, ...imported }).map(([key]) => [
+    key,
+    isPresent(imported?.[key]) ? imported[key] : current?.[key],
+  ]),
+);
+
+const applyImportedRows = (currentRows = [], importedRows = [], conflictMode = 'skip') => {
+  const result = [...(Array.isArray(currentRows) ? currentRows : [])];
+  const imported = Array.isArray(importedRows) ? importedRows : [];
+
+  imported.forEach((row) => {
+    const index = row?.id ? result.findIndex((item) => item?.id === row.id) : -1;
+    if (index < 0) {
+      result.push(row);
+      return;
+    }
+    if (conflictMode === 'skip') return;
+    result[index] = conflictMode === 'merge' ? mergeImportedRecord(result[index], row) : row;
+  });
+
+  return result;
+};
+
 export default function PortfolioWorkspace({
   funds = [],
   legacyHoldings = {},
+  groupHoldings = {},
   portfolios = [],
   setPortfolios,
   portfolioHoldings = [],
@@ -87,6 +122,8 @@ export default function PortfolioWorkspace({
   const [importText, setImportText] = useState('');
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
   const [importAnalysis, setImportAnalysis] = useState(null);
+  const [csvText, setCsvText] = useState('');
+  const [csvAnalysis, setCsvAnalysis] = useState(null);
 
   const activePortfolios = useMemo(
     () => portfolios.filter((portfolio) => !portfolio.archived),
@@ -137,8 +174,25 @@ export default function PortfolioWorkspace({
     () => portfolioSnapshots.filter((snapshot) => snapshot.portfolioId === selectedPortfolio?.id),
     [portfolioSnapshots, selectedPortfolio?.id],
   );
+  const selectedRiskMetrics = useMemo(
+    () => selectedPortfolio ? buildDashboardRiskMetrics({
+      portfolio: selectedPortfolio,
+      snapshots: selectedSnapshots,
+      holdings: selectedHoldings,
+      summary: selectedSummary,
+    }) : null,
+    [selectedHoldings, selectedPortfolio, selectedSnapshots, selectedSummary],
+  );
   const transactionBaselines = portfolioSettings?.transactionBaselines || {};
   const selectedTransactionBaseline = selectedPortfolio?.id ? transactionBaselines[selectedPortfolio.id] : null;
+  const selectedSnapshotSettings = selectedPortfolio?.id
+    ? portfolioSettings?.portfolioSnapshotSettings?.[selectedPortfolio.id] || {}
+    : {};
+  const automaticSnapshotEnabled = Boolean(
+    selectedSnapshotSettings.automaticDailySnapshotEnabled
+    || selectedSnapshotSettings.autoSnapshotEnabled
+    || selectedSnapshotSettings.snapshotReminderEnabled,
+  );
   const allocationTotal = useMemo(
     () => (selectedPortfolio?.targetAllocations || []).reduce((sum, row) => sum + Number(row.targetRatio || 0), 0),
     [selectedPortfolio],
@@ -168,6 +222,15 @@ export default function PortfolioWorkspace({
       portfolioId: selectedPortfolio?.id,
     }),
     [funds, legacyHoldings, portfolioHoldings, selectedPortfolio?.id],
+  );
+  const groupMigrationPreview = useMemo(
+    () => previewGroupHoldingsMigration({
+      funds,
+      groupHoldings,
+      existingPortfolioHoldings: portfolioHoldings,
+      portfolioId: selectedPortfolio?.id,
+    }),
+    [funds, groupHoldings, portfolioHoldings, selectedPortfolio?.id],
   );
   const localFundMatches = useMemo(() => {
     const query = String(holdingDraft.fundCode || holdingDraft.fundName || '').trim().toLowerCase();
@@ -209,6 +272,27 @@ export default function PortfolioWorkspace({
       clearTimeout(timer);
     };
   }, [holdingDraft.fundCode, holdingDraft.fundName, holdingDraft.instrumentType]);
+
+  useEffect(() => {
+    if (!selectedPortfolio) return;
+    const result = prepareAutomaticDailySnapshot({
+      portfolio: selectedPortfolio,
+      holdings: portfolioHoldings,
+      snapshots: portfolioSnapshots,
+      portfolioSettings: {
+        ...portfolioSettings,
+        portfolioSnapshotSettings: {
+          ...(portfolioSettings?.portfolioSnapshotSettings || {}),
+          [selectedPortfolio.id]: {
+            ...(portfolioSettings?.portfolioSnapshotSettings?.[selectedPortfolio.id] || {}),
+            automaticSnapshotConflictMode: 'skip',
+          },
+        },
+      },
+      date: today(),
+    });
+    if (result.shouldPersist) setPortfolioSnapshots(result.snapshots);
+  }, [portfolioHoldings, portfolioSettings, portfolioSnapshots, selectedPortfolio, setPortfolioSnapshots]);
 
   useEffect(() => {
     const code = String(holdingDraft.fundCode || '').trim();
@@ -442,9 +526,62 @@ export default function PortfolioWorkspace({
     setSelectedPortfolioId(parsed.portfolios?.[0]?.id || '');
   };
 
+  const analyzeCsvImport = ({ csv, type }) => {
+    const result = analyzePortfolioCsvImport({
+      csv,
+      type,
+      knownFunds: funds,
+      validPortfolioIds: portfolios.map((portfolio) => portfolio.id),
+      validHoldingIds: portfolioHoldings.map((holding) => holding.id),
+    });
+    setCsvAnalysis(result);
+    return result;
+  };
+
+  const applyCsvImport = ({ type, conflictMode, analysis }) => {
+    const rows = Array.isArray(analysis?.rows) ? analysis.rows : [];
+    if (!rows.length) return analysis;
+    if (type === 'portfolioHoldings') {
+      setPortfolioHoldings((prev) => applyImportedRows(prev, rows, conflictMode));
+    } else if (type === 'portfolioTransactions') {
+      setPortfolioTransactions((prev) => applyImportedRows(prev, rows, conflictMode));
+    } else if (type === 'portfolioSnapshots') {
+      setPortfolioSnapshots((prev) => applyImportedRows(prev, rows, conflictMode));
+    }
+    return analysis;
+  };
+
+  const exportCsv = ({ type }) => {
+    const rowsByType = {
+      portfolioHoldings: portfolioHoldings.filter((row) => row.portfolioId === selectedPortfolio?.id),
+      portfolioTransactions: portfolioTransactions.filter((row) => row.portfolioId === selectedPortfolio?.id),
+      portfolioSnapshots: portfolioSnapshots.filter((row) => row.portfolioId === selectedPortfolio?.id),
+    };
+    return exportPortfolioCsv({ type, rows: rowsByType[type] || [] });
+  };
+
   const runLegacyMigration = () => {
     if (!selectedPortfolio || !legacyMigrationPreview.holdings?.length) return;
     setPortfolioHoldings((prev) => [...prev, ...legacyMigrationPreview.holdings]);
+  };
+
+  const runGroupMigration = () => {
+    if (!selectedPortfolio || !groupMigrationPreview.holdings?.length) return;
+    setPortfolioHoldings((prev) => [...prev, ...groupMigrationPreview.holdings]);
+  };
+
+  const setAutomaticSnapshotEnabled = (enabled) => {
+    if (!selectedPortfolio?.id) return;
+    setPortfolioSettings((prev = {}) => ({
+      ...prev,
+      portfolioSnapshotSettings: {
+        ...(prev.portfolioSnapshotSettings || {}),
+        [selectedPortfolio.id]: {
+          ...(prev.portfolioSnapshotSettings?.[selectedPortfolio.id] || {}),
+          automaticDailySnapshotEnabled: enabled,
+        },
+      },
+    }));
   };
 
   const savePortfolio = (nextPortfolio) => {
@@ -569,6 +706,43 @@ export default function PortfolioWorkspace({
                 />
               )}
             </div>
+            {selectedRiskMetrics && (
+              <div className="portfolio-table-wrap">
+                <table className="portfolio-table">
+                  <thead>
+                    <tr>
+                      <th>Risk / contribution</th>
+                      <th>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Alerts</td>
+                      <td>{selectedRiskMetrics.alertSummary.total} total, {selectedRiskMetrics.alertSummary.high} high</td>
+                    </tr>
+                    <tr>
+                      <td>Snapshots</td>
+                      <td>{selectedRiskMetrics.trend.snapshotCount}</td>
+                    </tr>
+                    <tr>
+                      <td>Latest value change</td>
+                      <td>¥{money(selectedRiskMetrics.trend.latestChange)}</td>
+                    </tr>
+                    <tr>
+                      <td>Max drawdown</td>
+                      <td>{pct(selectedRiskMetrics.trend.maxDrawdown)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                {selectedRiskMetrics.alerts.length > 0 && (
+                  <ul className="portfolio-import-errors">
+                    {selectedRiskMetrics.alerts.slice(0, 3).map((alert) => (
+                      <li key={`${alert.code}-${alert.assetClassId || 'portfolio'}`}>{alert.title}: {alert.message}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </Panel>
           )}
 
@@ -691,6 +865,7 @@ export default function PortfolioWorkspace({
           )}
 
           {activeDetailTab === 'history' && (
+            <>
             <PortfolioHistoryImportPanel
               snapshots={selectedSnapshots}
               importText={importText}
@@ -702,7 +877,10 @@ export default function PortfolioWorkspace({
               analysis={importAnalysis}
               onApplyImport={applyAnalyzedImport}
               onRecordSnapshot={recordSnapshot}
+              snapshotAutoEnabled={automaticSnapshotEnabled}
+              onSnapshotAutoEnabledChange={setAutomaticSnapshotEnabled}
             />
+            </>
           )}
 
           {activeDetailTab === 'backtest' && (
@@ -726,7 +904,18 @@ export default function PortfolioWorkspace({
 
           {activeDetailTab === 'holdings' && (
           <>
-          <PortfolioMigrationPanel preview={legacyMigrationPreview} onRunMigration={runLegacyMigration} />
+          <PortfolioMigrationPanel
+            preview={legacyMigrationPreview}
+            onRunMigration={runLegacyMigration}
+            title="Legacy holdings migration"
+          />
+          <PortfolioMigrationPanel
+            preview={groupMigrationPreview}
+            onRunMigration={runGroupMigration}
+            eyebrow="Group migration"
+            title="Group holdings migration"
+            actionLabel="Migrate group holdings"
+          />
           <Panel title="新增持仓">
             <p className="portfolio-panel-intro">基金可填写代码自动匹配名称；现金和手动资产可直接填名称与金额。</p>
             <div className="portfolio-form">
@@ -805,6 +994,20 @@ export default function PortfolioWorkspace({
               <div className="portfolio-form">
                 <button type="button" className="button secondary" onClick={exportJson}>生成 JSON</button>
                 <span className="muted">生成后会填入左侧文本框，可复制保存或重新导入。</span>
+                <PortfolioCsvImportPanel
+                  csvText={csvText}
+                  onCsvTextChange={(next) => {
+                    setCsvText(next);
+                    setCsvAnalysis(null);
+                  }}
+                  csvTypes={CSV_IMPORT_TYPES}
+                  conflictModes={Object.values(PORTFOLIO_IMPORT_CONFLICT_MODES)}
+                  analysis={csvAnalysis}
+                  onAnalyze={analyzeCsvImport}
+                  onApply={applyCsvImport}
+                  onExport={exportCsv}
+                  framed={false}
+                />
               </div>
             </Panel>
           )}

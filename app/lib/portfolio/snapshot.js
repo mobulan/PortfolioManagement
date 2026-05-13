@@ -34,3 +34,95 @@ export function createPortfolioSnapshot({ portfolio, holdings = [], date, source
     createdAt: new Date().toISOString(),
   };
 }
+
+const getToday = () => new Date().toISOString().slice(0, 10);
+
+const isObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const getPortfolioSnapshotSettings = (portfolioSettings = {}, portfolioId = '') => {
+  const scoped = portfolioSettings?.portfolioSnapshotSettings?.[portfolioId];
+  return {
+    ...(isObject(portfolioSettings) ? portfolioSettings : {}),
+    ...(isObject(scoped) ? scoped : {}),
+  };
+};
+
+const isAutomaticSnapshotEnabled = (settings) => (
+  settings.automaticDailySnapshotEnabled === true
+  || settings.autoSnapshotEnabled === true
+  || settings.snapshotReminderEnabled === true
+);
+
+const getAutomaticSnapshotConflictMode = (settings) => (
+  ['skip', 'overwrite'].includes(settings.automaticSnapshotConflictMode)
+    ? settings.automaticSnapshotConflictMode
+    : 'skip'
+);
+
+const sortSnapshots = (snapshots) => [...snapshots].sort((a, b) => {
+  const dateOrder = String(a?.date || '').localeCompare(String(b?.date || ''));
+  if (dateOrder) return dateOrder;
+  return String(a?.portfolioId || '').localeCompare(String(b?.portfolioId || ''));
+});
+
+export function prepareAutomaticDailySnapshot({
+  portfolio,
+  holdings = [],
+  snapshots = [],
+  portfolioSettings = {},
+  date = getToday(),
+} = {}) {
+  if (!portfolio?.id) {
+    return {
+      status: 'skipped',
+      reason: 'missing_portfolio',
+      snapshot: null,
+      snapshots,
+      shouldPersist: false,
+    };
+  }
+
+  const settings = getPortfolioSnapshotSettings(portfolioSettings, portfolio.id);
+  if (!isAutomaticSnapshotEnabled(settings)) {
+    return {
+      status: 'skipped',
+      reason: 'disabled',
+      snapshot: null,
+      snapshots,
+      shouldPersist: false,
+    };
+  }
+
+  const rows = Array.isArray(snapshots) ? snapshots : [];
+  const existing = rows.find((row) => row?.portfolioId === portfolio.id && row?.date === date);
+  const conflictMode = getAutomaticSnapshotConflictMode(settings);
+
+  if (existing && conflictMode !== 'overwrite') {
+    return {
+      status: 'skipped',
+      reason: 'already_exists',
+      snapshot: existing,
+      snapshots,
+      shouldPersist: false,
+    };
+  }
+
+  const snapshot = createPortfolioSnapshot({
+    portfolio,
+    holdings,
+    date,
+    source: 'auto',
+    note: 'Automatic daily snapshot',
+  });
+  const nextSnapshots = existing
+    ? rows.map((row) => (row?.portfolioId === portfolio.id && row?.date === date ? snapshot : row))
+    : [...rows, snapshot];
+
+  return {
+    status: 'created',
+    reason: existing ? 'overwritten' : 'created',
+    snapshot,
+    snapshots: sortSnapshots(nextSnapshots),
+    shouldPersist: true,
+  };
+}
