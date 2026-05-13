@@ -11,6 +11,7 @@ import {
   aggregateDashboard,
   calculateRebalancePlan,
   calculateSmartCashPlan,
+  createRebalanceTransactionDrafts,
   applyPortfolioTransaction,
   createPortfolioTransactionBaseline,
   createPortfolioSnapshot,
@@ -118,6 +119,15 @@ export default function PortfolioWorkspace({
   const smartCashPlan = useMemo(
     () => selectedPortfolio ? calculateSmartCashPlan(selectedPortfolio, portfolioHoldings, Number(cashflowAmount || 0)) : null,
     [selectedPortfolio, portfolioHoldings, cashflowAmount],
+  );
+  const rebalanceTransactionDrafts = useMemo(
+    () => selectedPortfolio ? createRebalanceTransactionDrafts({
+      portfolio: selectedPortfolio,
+      holdings: portfolioHoldings,
+      plan: rebalancePlan,
+      date: today(),
+    }) : [],
+    [portfolioHoldings, rebalancePlan, selectedPortfolio],
   );
   const selectedHoldings = useMemo(
     () => portfolioHoldings.filter((holding) => holding.portfolioId === selectedPortfolio?.id && !holding.archived),
@@ -323,6 +333,45 @@ export default function PortfolioWorkspace({
     setPortfolioTransactions((prev) => [...prev, result.transaction]);
     setPortfolioPrincipalRecords(result.principalRecords);
     setTransactionDraft({ type: 'buy', holdingId: '', amount: '', share: '', price: '', fee: '', date: today() });
+  };
+
+  const applyTransactionDrafts = (drafts = []) => {
+    if (!selectedPortfolio || !drafts.length) return;
+    if (!selectedTransactionBaseline) {
+      const baseline = createPortfolioTransactionBaseline({
+        portfolioId: selectedPortfolio.id,
+        holdings: selectedHoldings,
+      });
+      setPortfolioSettings((prev = {}) => ({
+        ...prev,
+        transactionBaselines: {
+          ...(prev.transactionBaselines || {}),
+          [selectedPortfolio.id]: baseline,
+        },
+      }));
+    }
+    const result = drafts.reduce((ledger, draft, index) => {
+      const applied = applyPortfolioTransaction({
+        holdings: ledger.holdings,
+        principalRecords: ledger.principalRecords,
+        transaction: {
+          ...draft,
+          id: `${draft.id}_${Date.now()}_${index}`,
+        },
+      });
+      return {
+        holdings: applied.holdings,
+        transactions: [...ledger.transactions, applied.transaction],
+        principalRecords: applied.principalRecords,
+      };
+    }, {
+      holdings: portfolioHoldings,
+      transactions: portfolioTransactions,
+      principalRecords: portfolioPrincipalRecords,
+    });
+    setPortfolioHoldings(result.holdings);
+    setPortfolioTransactions(result.transactions);
+    setPortfolioPrincipalRecords(result.principalRecords);
   };
 
   const applyLedgerRebuild = ({ transactionId = '' } = {}) => {
@@ -601,6 +650,43 @@ export default function PortfolioWorkspace({
                 {(smartCashPlan?.items || []).map((item) => `${item.assetClassName} ¥${money(item.amount)}`).join('；') || '输入金额查看建议'}
               </span>
             </div>
+            <div className="portfolio-table-wrap">
+              <table className="portfolio-table">
+                <thead>
+                  <tr>
+                    <th>执行动作</th>
+                    <th>资产</th>
+                    <th>金额</th>
+                    <th>份额</th>
+                    <th>价格</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rebalanceTransactionDrafts.length ? rebalanceTransactionDrafts.map((draft) => (
+                    <tr key={draft.id}>
+                      <td>{draft.type}</td>
+                      <td>{draft.assetClassId}</td>
+                      <td>¥{money(draft.amount)}</td>
+                      <td>{money(draft.share)}</td>
+                      <td>{money(draft.price)}</td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={5}>暂无可执行草案。需要存在对应资产类别的持仓。</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <button
+              type="button"
+              className="button"
+              onClick={() => applyTransactionDrafts(rebalanceTransactionDrafts)}
+              disabled={!rebalanceTransactionDrafts.length}
+            >
+              <Save size={16} />
+              应用再平衡草案
+            </button>
           </Panel>
           )}
 

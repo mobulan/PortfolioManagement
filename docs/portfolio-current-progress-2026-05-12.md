@@ -10,14 +10,14 @@
 
 ## Overall Completion
 
-Estimated overall PRD completion: **about 74%**
+Estimated overall PRD completion: **about 76%**
 
 | Scope | Completion | Notes |
 | --- | ---: | --- |
 | Milestone 1: Repository and baseline | 100% | Git initialized, upstream preserved, origin configured and pushed. |
 | Milestone 2: Data core | 90% | Schema, storage keys, migrations, JSON import/export, calculations, transactions, snapshots, backtest helpers are present. |
 | Milestone 3: Usable portfolio management | 85% | Can create/delete portfolios, edit metadata/allocation, add/remove holdings, search/select funds, delete/rebuild baseline-backed transactions, and view dashboard, holdings, transactions, history, and backtest tab. |
-| Milestone 4: Dashboard and rebalance | 60% | Basic asset dashboard, empty states, and rebalance suggestions exist; richer risk cards, charts, and actionable rebalance execution are pending. |
+| Milestone 4: Dashboard and rebalance | 68% | Basic asset dashboard, empty states, rebalance suggestions, and executable rebalance transaction drafts exist; richer risk cards and charts are pending. |
 | Milestone 5: History and migration | 50% | Manual snapshots, JSON import/export, CSV helper layer, and legacy holdings preview exist; automatic snapshots, CSV UI, XLSM mapping, and group-level migration are pending. |
 | Milestone 6: Backtest and enhancements | 30% | Risk metric engine and manual value-series backtest UI exist; historical NAV-driven backtest, correlation UI, saved reports, AI analysis, and full Supabase QA are pending. |
 
@@ -124,7 +124,6 @@ Known verification notes:
 
 ### P0 / Near-Term
 
-- Add actionable forced-rebalance list and a safe path from rebalance advice to generated transactions.
 - Add clearer user-facing validation for import conflicts and transaction edit/delete operations.
 - Complete group-level migration from existing `groupHoldings`.
 - Add automatic daily snapshot option.
@@ -162,6 +161,36 @@ Recommended convention:
 - Use `portfolio-current-progress-YYYY-MM-DD.md` for current progress snapshots.
 - Keep process-heavy agent logs, but treat them as archive material once a current progress snapshot exists.
 - Do not delete process docs yet; they still preserve implementation decisions and agent accountability.
+
+## 2026-05-13 Rebalance Execution Plan
+
+Action plan for this pass:
+
+- Add a pure helper that converts rebalance plan items into executable transaction drafts.
+- Keep execution conservative: generate drafts only for asset classes with matching active holdings and non-zero rebalance amounts.
+- Wire the rebalance tab to preview transaction drafts and let the user apply them through the existing transaction engine.
+- Update progress and test documents after verification.
+
+Acceptance criteria:
+
+- Rebalance drafts map buy/sell actions to existing holdings by asset class.
+- Drafts include amount, share estimate, price estimate, and source metadata.
+- Draft generation skips `hold` rows and asset classes without a suitable holding.
+- Applying drafts updates holdings, transactions, and principal records through `applyPortfolioTransaction`.
+
+Completed in this pass:
+
+- Added `createRebalanceTransactionDrafts` in `app/lib/portfolio/rebalance.js`.
+- Added smoke coverage for mapping buy/sell rebalance rows to existing holdings.
+- Wired the rebalance tab to show executable transaction drafts.
+- Added an "apply rebalance drafts" action that routes drafts through `applyPortfolioTransaction`.
+- Captures a transaction baseline before applying rebalance drafts when the current portfolio has no baseline.
+
+Verification:
+
+- `node scripts\portfolio-smoke-test.mjs`: passed
+- `npm run lint`: passed
+- `npm run build`: passed
 
 ## 2026-05-13 Transaction Ledger Continuation Plan
 

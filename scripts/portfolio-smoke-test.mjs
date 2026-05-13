@@ -12,6 +12,7 @@ import {
 } from '../app/lib/portfolio/calculations.js';
 import {
   calculateRebalancePlan,
+  createRebalanceTransactionDrafts,
   calculateSmartCashPlan,
 } from '../app/lib/portfolio/rebalance.js';
 import {
@@ -186,6 +187,31 @@ test('rebalance identifies over-weight and under-weight permanent portfolio slee
   nearly(equity.rebalanceAmount, -45);
   assert.equal(cash.action, 'buy');
   nearly(cash.rebalanceAmount, 95);
+});
+
+test('rebalance transaction drafts map actionable buy and sell rows to holdings', () => {
+  const rebalance = calculateRebalancePlan(portfolio, holdings);
+  const drafts = createRebalanceTransactionDrafts({
+    portfolio,
+    holdings,
+    plan: rebalance,
+    date: '2026-05-13',
+  });
+
+  const sellEquity = drafts.find((draft) => draft.assetClassId === 'equity');
+  const buyCash = drafts.find((draft) => draft.assetClassId === 'cash');
+
+  assert.equal(drafts.some((draft) => draft.assetClassId === 'bond'), false);
+  assert.equal(sellEquity.type, 'sell');
+  assert.equal(sellEquity.holdingId, 'h_equity_a');
+  nearly(sellEquity.amount, 45);
+  nearly(sellEquity.price, 1.2);
+  nearly(sellEquity.share, 37.5);
+  assert.equal(sellEquity.source, 'rebalance');
+
+  assert.equal(buyCash.type, 'cash_in');
+  assert.equal(buyCash.holdingId, 'h_cash');
+  nearly(buyCash.amount, 95);
 });
 
 test('smart cash flow fills or trims the most drifted sleeves first', () => {
