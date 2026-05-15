@@ -7,9 +7,9 @@ const countText = (value) => Number(value || 0).toLocaleString('zh-CN');
 export default function PortfolioMigrationPanel({
   preview,
   onRunMigration,
-  eyebrow = 'Legacy migration',
-  title = 'Migration preview',
-  actionLabel = 'Migrate holdings',
+  eyebrow = '历史迁移',
+  title = '迁移预览',
+  actionLabel = '迁移持仓',
 }) {
   const migratableCount = Number(preview?.migratableCount || preview?.holdings?.length || 0);
   const skippedCount = Number(preview?.skippedCount || 0);
@@ -24,19 +24,26 @@ export default function PortfolioMigrationPanel({
           <span className="muted">{eyebrow}</span>
           <h3>{title}</h3>
         </div>
-        <button type="button" className="button" onClick={onRunMigration} disabled={!canRun}>
-          <DatabaseZap size={16} />
-          {actionLabel}
-        </button>
+        {canRun ? (
+          <button type="button" className="button" onClick={onRunMigration}>
+            <DatabaseZap size={16} />
+            {actionLabel}
+          </button>
+        ) : (
+          <span className="portfolio-migration-status">
+            <DatabaseZap size={16} />
+            暂无可迁移
+          </span>
+        )}
       </div>
 
       <div className="portfolio-stats">
         <div>
-          <span className="muted">Migratable</span>
+          <span className="muted">可迁移</span>
           <strong>{countText(migratableCount)}</strong>
         </div>
         <div>
-          <span className="muted">Skipped</span>
+          <span className="muted">已跳过</span>
           <strong>{countText(skippedCount)}</strong>
         </div>
       </div>
@@ -46,10 +53,10 @@ export default function PortfolioMigrationPanel({
           <table className="portfolio-table">
             <thead>
               <tr>
-                <th>Fund code</th>
-                <th>Fund name</th>
-                <th>Shares</th>
-                <th>Cost</th>
+                <th>基金代码</th>
+                <th>基金名称</th>
+                <th>份额</th>
+                <th>成本</th>
               </tr>
             </thead>
             <tbody>
@@ -65,14 +72,14 @@ export default function PortfolioMigrationPanel({
           </table>
         </div>
       ) : (
-        <p className="muted">No migratable holdings found.</p>
+        <p className="muted">暂无可迁移持仓。当前数据已经迁移完成，或没有可识别的旧持仓。</p>
       )}
 
       {skipped.length > 0 && (
         <ul className="portfolio-import-errors">
           {skipped.slice(0, 5).map((item, index) => (
             <li key={`${item.groupId || 'group'}-${item.fundCode || index}`}>
-              {item.groupId ? `${item.groupId} / ` : ''}{item.fundCode || '-'}: {item.reason || 'skipped'}
+              {item.groupId ? `${item.groupId} / ` : ''}{item.fundCode || '-'}：{item.reason || '已跳过'}
             </li>
           ))}
         </ul>

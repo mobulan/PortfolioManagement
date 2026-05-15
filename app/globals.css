@@ -4818,7 +4818,14 @@ input[type="number"] {
   gap: 8px;
 }
 
-.portfolio-mode-toggle button {
+.portfolio-asset-class-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.portfolio-mode-toggle button,
+.portfolio-asset-class-buttons button {
   min-height: 38px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -4829,10 +4836,26 @@ input[type="number"] {
   cursor: pointer;
 }
 
-.portfolio-mode-toggle button.is-active {
+.portfolio-mode-toggle button.is-active,
+.portfolio-asset-class-buttons button.is-active {
   border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--text);
+  font-weight: 700;
+}
+
+.portfolio-migration-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--muted);
+  font-size: 0.92rem;
   font-weight: 700;
 }
 
@@ -5272,6 +5295,10 @@ input[type="number"] {
 
   .portfolio-inline-form {
     grid-template-columns: 1fr;
+  }
+
+  .portfolio-asset-class-buttons {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .portfolio-detail-tab-scroll {

@@ -36,6 +36,8 @@ import {
 import {
   buildPortfolioHoldingFromDraft,
   findPortfolioFundCandidate,
+  getPortfolioHoldingDraftErrors,
+  parsePortfolioNumber,
 } from '../app/lib/portfolio/holdingForm.js';
 import {
   normalizeAllocationDraftPercents,
@@ -537,6 +539,9 @@ test('portfolio holding form matches fund candidates from loaded funds and searc
 });
 
 test('portfolio holding form supports amount and share input modes', () => {
+  nearly(parsePortfolioNumber('39,202.20'), 39202.2);
+  assert.equal(getPortfolioHoldingDraftErrors({ costAmount: '39,20,2.20' }).length, 1);
+
   const amountMode = buildPortfolioHoldingFromDraft({
     portfolioId: portfolio.id,
     draft: {
@@ -552,6 +557,24 @@ test('portfolio holding form supports amount and share input modes', () => {
   nearly(amountMode.costAmount, 10);
   nearly(amountMode.manualValue, 12);
   nearly(calculatePortfolioSummary(portfolio, [amountMode]).totalProfit, 2);
+
+  const fundAmountMode = buildPortfolioHoldingFromDraft({
+    portfolioId: portfolio.id,
+    draft: {
+      instrumentType: 'fund',
+      assetClassId: 'equity',
+      fundCode: '006961',
+      valueMode: 'amount',
+      costAmount: '39,202.20',
+      manualValue: '40,266.20',
+    },
+    funds: [{ code: '006961', name: '富国深证红利ETF联接A', gsz: 1.25, dwjz: 1.24, lastNav: 1.22 }],
+  });
+  assert.equal(fundAmountMode.fundName, '富国深证红利ETF联接A');
+  nearly(fundAmountMode.costAmount, 39202.2);
+  nearly(fundAmountMode.manualValue, 40266.2);
+  nearly(fundAmountMode.estimatedNav, 1.25);
+  nearly(fundAmountMode.share, 32212.96);
 
   const shareMode = buildPortfolioHoldingFromDraft({
     portfolioId: portfolio.id,

@@ -20,7 +20,7 @@ const knownFunds = [
 test('CSV preview drops malformed dates, malformed amounts, and unknown fund codes', () => {
   const csv = [
     'portfolioId,holdingId,fundCode,assetClassId,type,date,amount,share,price,fee,note',
-    'p1,h1,000001,equity,buy,2026-05-12,100.50,10,10.05,0.1,valid buy',
+    'p1,h1,000001,equity,buy,2026-05-12,"1,100.50",10,10.05,0.1,valid buy',
     'p1,h1,000001,equity,buy,2026-99-12,100,10,10,0,bad date',
     'p1,h1,000001,equity,buy,2026-05-13,abc,10,10,0,bad amount',
     'p1,h_unknown,999999,equity,buy,2026-05-14,100,10,10,0,unknown code',
@@ -39,7 +39,7 @@ test('CSV preview drops malformed dates, malformed amounts, and unknown fund cod
   assert.equal(preview.counts.valid, 1);
   assert.equal(preview.counts.dropped, 3);
   assert.equal(preview.rows.length, 1);
-  assert.equal(preview.rows[0].amount, 100.5);
+  assert.equal(preview.rows[0].amount, 1100.5);
   assert.equal(preview.rows[0].fundCode, '000001');
   assert.ok(preview.errors.some((message) => message.includes('date invalid')));
   assert.ok(preview.errors.some((message) => message.includes('amount invalid')));

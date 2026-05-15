@@ -6,6 +6,7 @@ import {
   normalizePortfolioTransaction,
   normalizePrincipalRecord,
 } from './schema.js';
+import { parsePortfolioNumber } from './holdingForm.js';
 
 const asArray = (value) => Array.isArray(value) ? value : [];
 const importTypes = [
@@ -22,18 +23,18 @@ export const CSV_IMPORT_TYPES = ['portfolioHoldings', 'portfolioTransactions', '
 export const PORTFOLIO_IMPORT_CONFLICT_MODES = {
   skip: {
     id: 'skip',
-    name: 'Skip existing records',
-    description: 'Keep current records when an imported id already exists.',
+    name: '跳过已有记录',
+    description: '导入 ID 已存在时保留当前记录。',
   },
   overwrite: {
     id: 'overwrite',
-    name: 'Overwrite existing records',
-    description: 'Replace current records with imported records that share the same id.',
+    name: '覆盖已有记录',
+    description: '导入 ID 已存在时用导入记录替换当前记录。',
   },
   merge: {
     id: 'merge',
-    name: 'Merge fields',
-    description: 'Keep current records and fill them with non-empty imported fields.',
+    name: '合并字段',
+    description: '保留当前记录，并填充导入记录中的非空字段。',
   },
 };
 
@@ -115,7 +116,7 @@ export function parsePortfolioCsv(csv = '') {
 const hasText = (value) => String(value ?? '').trim() !== '';
 const toCsvNumber = (value, field, errors) => {
   if (!hasText(value)) return null;
-  const number = Number(value);
+  const number = parsePortfolioNumber(value, NaN);
   if (!Number.isFinite(number)) {
     errors.push(`${field} invalid: ${value}`);
     return null;
@@ -144,20 +145,24 @@ const assertKnownFundCode = (row, knownFundCodes, errors) => {
 const normalizeCsvHolding = (row, context) => {
   const errors = [];
   assertKnownFundCode(row, context.knownFundCodes, errors);
-  ['share', 'costPrice', 'costAmount', 'currentNav', 'estimatedNav', 'previousNav', 'currentValue', 'manualValue']
-    .forEach((field) => toCsvNumber(row[field], field, errors));
+  const numeric = Object.fromEntries(
+    ['share', 'costPrice', 'costAmount', 'currentNav', 'estimatedNav', 'previousNav', 'currentValue', 'manualValue']
+      .map((field) => [field, toCsvNumber(row[field], field, errors)]),
+  );
   if (context.validPortfolioIds.size && !context.validPortfolioIds.has(row.portfolioId)) {
     errors.push(`portfolioId ${row.portfolioId || '(empty)'} was not found`);
   }
   if (errors.length) return { row: null, errors };
-  return { row: normalizePortfolioHolding(row), errors };
+  return { row: normalizePortfolioHolding({ ...row, ...numeric }), errors };
 };
 
 const normalizeCsvTransaction = (row, context) => {
   const errors = [];
   assertKnownFundCode(row, context.knownFundCodes, errors);
   if (!isValidIsoDate(row.date)) errors.push(`date invalid: ${row.date || '(empty)'}`);
-  ['amount', 'share', 'price', 'fee', 'principalImpact'].forEach((field) => toCsvNumber(row[field], field, errors));
+  const numeric = Object.fromEntries(
+    ['amount', 'share', 'price', 'fee', 'principalImpact'].map((field) => [field, toCsvNumber(row[field], field, errors)]),
+  );
   if (!hasText(row.amount)) errors.push('amount invalid: (empty)');
   if (context.validPortfolioIds.size && !context.validPortfolioIds.has(row.portfolioId)) {
     errors.push(`portfolioId ${row.portfolioId || '(empty)'} was not found`);
@@ -166,7 +171,7 @@ const normalizeCsvTransaction = (row, context) => {
     errors.push(`holdingId ${row.holdingId} was not found`);
   }
   if (errors.length) return { row: null, errors };
-  return { row: normalizePortfolioTransaction(row), errors };
+  return { row: normalizePortfolioTransaction({ ...row, ...numeric }), errors };
 };
 
 const normalizeCsvSnapshot = (row, context) => {

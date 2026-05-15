@@ -3,12 +3,12 @@
 import { ClipboardCheck, RefreshCw, Upload } from 'lucide-react';
 
 const importTypes = [
-  ['portfolios', 'Portfolios'],
-  ['portfolioHoldings', 'Holdings'],
-  ['portfolioTransactions', 'Transactions'],
-  ['portfolioPrincipalRecords', 'Principal'],
-  ['portfolioSnapshots', 'Snapshots'],
-  ['portfolioBacktests', 'Backtests'],
+  ['portfolios', '组合'],
+  ['portfolioHoldings', '持仓'],
+  ['portfolioTransactions', '交易'],
+  ['portfolioPrincipalRecords', '本金记录'],
+  ['portfolioSnapshots', '快照'],
+  ['portfolioBacktests', '回测'],
 ];
 
 const money = (value) => Number(value || 0).toLocaleString('zh-CN', {
@@ -37,12 +37,12 @@ export default function PortfolioHistoryImportPanel({
 
   return (
     <section className="portfolio-panel glass">
-      <h3>Snapshots and JSON import</h3>
+      <h3>快照与 JSON 导入</h3>
       <div className="portfolio-form">
         <div className="portfolio-inline-form">
           <button type="button" className="button secondary" onClick={onRecordSnapshot}>
             <RefreshCw size={16} />
-            Record today snapshot
+            记录今日快照
           </button>
           <label className="muted">
             <input
@@ -50,22 +50,22 @@ export default function PortfolioHistoryImportPanel({
               checked={snapshotAutoEnabled}
               onChange={(event) => onSnapshotAutoEnabledChange?.(event.target.checked)}
             />
-            Auto daily snapshot
+            自动每日快照
           </label>
         </div>
         <div className="portfolio-summary-grid">
-          <Metric label="Snapshots" value={sortedSnapshots.length} />
-          <Metric label="Value change" value={`¥${money(valueChange)}`} tone={valueChange >= 0 ? 'up' : 'down'} />
-          <Metric label="Return" value={percent(valueChangeRate)} tone={valueChangeRate >= 0 ? 'up' : 'down'} />
+          <Metric label="快照数" value={sortedSnapshots.length} />
+          <Metric label="资产变化" value={`¥${money(valueChange)}`} tone={valueChange >= 0 ? 'up' : 'down'} />
+          <Metric label="收益率" value={percent(valueChangeRate)} tone={valueChangeRate >= 0 ? 'up' : 'down'} />
         </div>
         <div className="portfolio-table-wrap">
           <table className="portfolio-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Total value</th>
-                <th>Principal</th>
-                <th>Profit</th>
+                <th>日期</th>
+                <th>总市值</th>
+                <th>本金</th>
+                <th>收益</th>
               </tr>
             </thead>
             <tbody>
@@ -78,7 +78,7 @@ export default function PortfolioHistoryImportPanel({
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={4}>No snapshots yet.</td>
+                  <td colSpan={4}>暂无快照。</td>
                 </tr>
               )}
             </tbody>
@@ -88,12 +88,12 @@ export default function PortfolioHistoryImportPanel({
           className="portfolio-textarea"
           value={importText}
           onChange={(event) => onImportTextChange?.(event.target.value)}
-          placeholder="Paste portfolio JSON, analyze it, then apply valid records."
+          placeholder="粘贴组合 JSON，先分析，再应用有效记录。"
         />
         <div className="portfolio-inline-form">
           <button type="button" className="button secondary" onClick={onAnalyze}>
             <ClipboardCheck size={16} />
-            Analyze JSON
+            分析 JSON
           </button>
           <button
             type="button"
@@ -102,7 +102,7 @@ export default function PortfolioHistoryImportPanel({
             disabled={!analysis || (analysis.counts?.portfolios?.valid || 0) === 0}
           >
             <Upload size={16} />
-            Apply valid records
+            应用有效记录
           </button>
         </div>
         {analysis && (
@@ -110,9 +110,9 @@ export default function PortfolioHistoryImportPanel({
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>Type</th>
-                  <th>Valid</th>
-                  <th>Dropped</th>
+                  <th>类型</th>
+                  <th>有效</th>
+                  <th>已丢弃</th>
                 </tr>
               </thead>
               <tbody>

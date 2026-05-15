@@ -4,22 +4,24 @@ import { useMemo, useState } from 'react';
 import { ClipboardCheck, Download, Upload } from 'lucide-react';
 
 const CSV_TYPE_OPTIONS = [
-  { id: 'portfolioHoldings', label: 'Holdings CSV' },
-  { id: 'portfolioTransactions', label: 'Transactions CSV' },
-  { id: 'portfolioSnapshots', label: 'Snapshots CSV' },
+  { id: 'portfolioHoldings', label: '持仓 CSV' },
+  { id: 'portfolioTransactions', label: '交易 CSV' },
+  { id: 'portfolioSnapshots', label: '快照 CSV' },
 ];
 
 const CONFLICT_MODE_OPTIONS = [
-  { id: 'skip', label: 'Skip existing', description: 'Keep current records when an imported id already exists.' },
-  { id: 'overwrite', label: 'Overwrite existing', description: 'Replace current records that share an imported id.' },
-  { id: 'merge', label: 'Merge fields', description: 'Keep current records and fill non-empty imported fields.' },
+  { id: 'skip', label: '跳过已有记录', description: '导入 ID 已存在时保留当前记录。' },
+  { id: 'overwrite', label: '覆盖已有记录', description: '导入 ID 已存在时用导入记录替换当前记录。' },
+  { id: 'merge', label: '合并字段', description: '保留当前记录，并填充导入记录中的非空字段。' },
 ];
+
+const CSV_TYPE_LABELS = Object.fromEntries(CSV_TYPE_OPTIONS.map((option) => [option.id, option.label]));
 
 const normalizeOptions = (options, fallback) => {
   const source = Array.isArray(options) && options.length ? options : fallback;
   return source
     .map((option) => {
-      if (typeof option === 'string') return { id: option, label: option };
+      if (typeof option === 'string') return { id: option, label: CSV_TYPE_LABELS[option] || option };
       if (!option?.id) return null;
       return {
         id: option.id,
@@ -33,7 +35,7 @@ const normalizeOptions = (options, fallback) => {
 const getCountsEntries = (result) => {
   const counts = result?.counts;
   if (!counts || typeof counts !== 'object') return [];
-  if ('valid' in counts || 'dropped' in counts) return [['Current type', counts]];
+  if ('valid' in counts || 'dropped' in counts) return [['当前类型', counts]];
   return Object.entries(counts);
 };
 
@@ -128,11 +130,11 @@ export default function PortfolioCsvImportPanel({
   };
 
   return (
-    <section className={framed ? 'portfolio-panel glass' : 'portfolio-csv-panel'} aria-label="CSV import export">
+    <section className={framed ? 'portfolio-panel glass' : 'portfolio-csv-panel'} aria-label="CSV 导入导出">
       <div className="portfolio-panel-header">
         <div>
-          <h3>CSV import/export</h3>
-          <span className="muted">Analyze CSV before applying rows to local portfolio storage.</span>
+          <h3>CSV 导入 / 导出</h3>
+          <span className="muted">先分析 CSV 内容，再把有效记录写入本地组合数据。</span>
         </div>
       </div>
 
@@ -150,22 +152,22 @@ export default function PortfolioCsvImportPanel({
           className="portfolio-textarea"
           value={inputText}
           onChange={(event) => updateText(event.target.value)}
-          placeholder="Paste CSV content. First row must be a header row."
+          placeholder="粘贴 CSV 内容，第一行必须是表头。"
           disabled={disabled || !!pendingAction}
         />
 
         <div className="portfolio-inline-form">
           <button type="button" className="button secondary" onClick={() => runAction('analyze', onAnalyze)} disabled={!canAnalyze}>
             <ClipboardCheck size={16} />
-            {pendingAction === 'analyze' ? 'Analyzing...' : 'Analyze CSV'}
+            {pendingAction === 'analyze' ? '分析中...' : '分析 CSV'}
           </button>
           <button type="button" className="button secondary" onClick={() => runAction('apply', onApply)} disabled={!canApply}>
             <Upload size={16} />
-            {pendingAction === 'apply' ? 'Applying...' : 'Apply valid rows'}
+            {pendingAction === 'apply' ? '应用中...' : '应用有效记录'}
           </button>
           <button type="button" className="button secondary" onClick={() => runAction('export', onExport)} disabled={!canExport}>
             <Download size={16} />
-            {pendingAction === 'export' ? 'Exporting...' : 'Export CSV'}
+            {pendingAction === 'export' ? '导出中...' : '导出 CSV'}
           </button>
         </div>
 
@@ -183,9 +185,9 @@ export default function PortfolioCsvImportPanel({
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>Type</th>
-                  <th>Valid</th>
-                  <th>Dropped</th>
+                  <th>类型</th>
+                  <th>有效</th>
+                  <th>已丢弃</th>
                 </tr>
               </thead>
               <tbody>
@@ -206,8 +208,8 @@ export default function PortfolioCsvImportPanel({
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>Row</th>
-                  <th>Content</th>
+                  <th>行号</th>
+                  <th>内容</th>
                 </tr>
               </thead>
               <tbody>
@@ -223,7 +225,7 @@ export default function PortfolioCsvImportPanel({
         )}
 
         {generatedCsv && (
-          <textarea className="portfolio-textarea" value={generatedCsv} readOnly aria-label="Generated CSV" />
+          <textarea className="portfolio-textarea" value={generatedCsv} readOnly aria-label="生成的 CSV" />
         )}
       </div>
     </section>

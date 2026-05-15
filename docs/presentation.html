@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>presentation | PortfolioManagement 项目进展汇报</title>
+  <style>
+    :root {
+      --bg: #f7f9fb;
+      --ink: #17202a;
+      --muted: #667085;
+      --line: #d8e0ea;
+      --panel: #ffffff;
+      --panel-2: #eef4f8;
+      --blue: #1f6feb;
+      --green: #099268;
+      --amber: #d97706;
+      --red: #c2410c;
+      --navy: #0f2742;
+      --shadow: 0 18px 48px rgba(20, 35, 55, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+
+    a { color: inherit; }
+
+    .deck {
+      width: min(1240px, calc(100vw - 40px));
+      margin: 0 auto;
+      padding: 28px 0 56px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      margin: 0 calc((100vw - min(1240px, calc(100vw - 40px))) / -2);
+      padding: 12px max(20px, calc((100vw - 1240px) / 2));
+      background: rgba(247, 249, 251, 0.92);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(14px);
+    }
+
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      width: min(1240px, calc(100vw - 40px));
+      margin: 0 auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      color: var(--navy);
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: var(--navy);
+      color: #fff;
+      font-weight: 900;
+    }
+
+    .nav {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .nav a {
+      text-decoration: none;
+      padding: 6px 9px;
+      border-radius: 6px;
+    }
+
+    .nav a:hover {
+      background: var(--panel-2);
+      color: var(--navy);
+    }
+
+    .slide {
+      min-height: 720px;
+      margin-top: 26px;
+      padding: 54px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .cover {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 44px;
+      align-items: center;
+      background:
+        linear-gradient(135deg, rgba(15, 39, 66, 0.96), rgba(31, 111, 235, 0.72)),
+        radial-gradient(circle at 72% 28%, rgba(9, 146, 104, 0.42), transparent 34%);
+      color: #fff;
+    }
+
+    .eyeline {
+      margin: 0 0 14px;
+      font-size: 14px;
+      letter-spacing: 0;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      font-size: 58px;
+      line-height: 1.06;
+      letter-spacing: 0;
+      margin-bottom: 22px;
+    }
+
+    h2 {
+      font-size: 34px;
+      line-height: 1.15;
+      margin-bottom: 20px;
+      color: var(--navy);
+    }
+
+    .cover h1 { color: #fff; }
+
+    .lead {
+      font-size: 20px;
+      color: rgba(255, 255, 255, 0.82);
+      max-width: 720px;
+    }
+
+    .cover-meta {
+      display: grid;
+      gap: 14px;
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 15px;
+    }
+
+    .status-orbit {
+      display: grid;
+      gap: 18px;
+      padding: 26px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.11);
+    }
+
+    .big-number {
+      font-size: 82px;
+      line-height: 0.98;
+      font-weight: 900;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin: 28px 0;
+    }
+
+    .metric {
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+    }
+
+    .metric b {
+      display: block;
+      font-size: 32px;
+      color: var(--navy);
+      margin-bottom: 8px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    .three-col {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .panel {
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+    }
+
+    .panel h3 {
+      margin-bottom: 12px;
+      color: var(--navy);
+      font-size: 19px;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    li { margin: 8px 0; }
+
+    .muted { color: var(--muted); }
+
+    .progress-list {
+      display: grid;
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .progress-row {
+      display: grid;
+      grid-template-columns: 190px 1fr 70px;
+      gap: 14px;
+      align-items: center;
+      font-size: 15px;
+    }
+
+    .bar {
+      height: 12px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: #e8eef5;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green));
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 18px;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--navy);
+      background: #f2f6fa;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .done { color: #06604a; background: #dff6ec; }
+    .partial { color: #8a4b00; background: #fff2d8; }
+    .todo { color: #9b2c13; background: #ffe4d6; }
+
+    .roadmap {
+      display: grid;
+      gap: 16px;
+      margin-top: 22px;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 20px;
+      padding: 18px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .stage strong {
+      color: var(--blue);
+      font-size: 22px;
+    }
+
+    .footnote {
+      margin-top: 28px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 860px) {
+      .slide { padding: 28px; min-height: auto; }
+      .cover, .two-col, .three-col, .metric-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 40px; }
+      h2 { font-size: 28px; }
+      .progress-row { grid-template-columns: 1fr; }
+      .topbar-inner { align-items: flex-start; flex-direction: column; }
+      .nav { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <div>presentation</div>
+      </div>
+      <nav class="nav" aria-label="汇报目录">
+        <a href="#summary">结论</a>
+        <a href="#milestones">进度</a>
+        <a href="#delivered">已完成</a>
+        <a href="#prd">PRD 对照</a>
+        <a href="#todo">待办</a>
+        <a href="#roadmap">路线图</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="deck">
+    <section class="slide cover" id="cover">
+      <div>
+        <p class="eyeline">PortfolioManagement 项目进展汇报</p>
+        <h1>从基金估值工具到投资组合管理 MVP</h1>
+        <p class="lead">当前主线已经完成组合管理核心闭环：数据层、持仓、交易、再平衡、快照、迁移、导入导出、风险摘要和基础回测。</p>
+        <div class="cover-meta">
+          <span>生成日期：2026-05-13</span>
+          <span>最新提交：a89e79b feat: advance portfolio migration and dashboard workflows</span>
+          <span>用途：内部进展汇报，只作为项目状态说明</span>
+        </div>
+      </div>
+      <aside class="status-orbit">
+        <div>
+          <div class="big-number">82%</div>
+          <p>整体 PRD 估算完成度</p>
+        </div>
+        <div>
+          <strong>P0 主流程大部分可用</strong>
+          <p class="muted">剩余重点在质量门、导入提示、浏览器回归和文案清理。</p>
+        </div>
+      </aside>
+    </section>
+
+    <section class="slide" id="summary">
+      <h2>一页结论</h2>
+      <div class="metric-grid">
+        <div class="metric"><b>8</b><span>组合相关本地存储 key 已接入</span></div>
+        <div class="metric"><b>7</b><span>组合工作区核心组件已落地</span></div>
+        <div class="metric"><b>6</b><span>组合模块烟测脚本覆盖主要纯逻辑</span></div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <h3>已经具备</h3>
+          <ul>
+            <li>组合创建、编辑、删除、归档和目标比例管理。</li>
+            <li>多资产类别、多基金、现金和手动资产持仓。</li>
+            <li>交易流水、本金记录、删除后 baseline 重建。</li>
+            <li>再平衡建议、智能现金流和可执行交易草案。</li>
+            <li>快照、自动每日快照、迁移预览、CSV/JSON 导入导出。</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>还差什么</h3>
+          <ul>
+            <li>浏览器级 UI 回归测试和真实多设备同步验证。</li>
+            <li>导入冲突、交易删除、再平衡执行的用户提示加强。</li>
+            <li>XLSM/Excel 映射、历史 NAV 回测、相关性矩阵。</li>
+            <li>更完整的 dashboard 图表、组合卡片和报告化输出。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="milestones">
+      <h2>里程碑完成度</h2>
+      <div class="progress-list">
+        <div class="progress-row"><strong>仓库与基线</strong><div class="bar"><span style="width:100%"></span></div><b>100%</b></div>
+        <div class="progress-row"><strong>数据核心</strong><div class="bar"><span style="width:90%"></span></div><b>90%</b></div>
+        <div class="progress-row"><strong>可用组合管理</strong><div class="bar"><span style="width:85%"></span></div><b>85%</b></div>
+        <div class="progress-row"><strong>Dashboard 与再平衡</strong><div class="bar"><span style="width:78%"></span></div><b>78%</b></div>
+        <div class="progress-row"><strong>历史与迁移</strong><div class="bar"><span style="width:70%"></span></div><b>70%</b></div>
+        <div class="progress-row"><strong>回测与增强</strong><div class="bar"><span style="width:35%"></span></div><b>35%</b></div>
+      </div>
+      <p class="footnote">完成度来自当前进展文档、测试覆盖和代码实现综合判断，不代表产品最终上线质量。</p>
+    </section>
+
+    <section class="slide" id="delivered">
+      <h2>已完成的关键交付</h2>
+      <div class="three-col">
+        <div class="panel">
+          <h3>数据层</h3>
+          <ul>
+            <li>schema 与规范化</li>
+            <li>汇总和资产类别计算</li>
+            <li>交易引擎和本金记录</li>
+            <li>快照和自动快照</li>
+            <li>导入导出和迁移预览</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>工作区</h3>
+          <ul>
+            <li>总览、持仓、交易、再平衡、历史、回测 tab</li>
+            <li>组合编辑器和持仓表单</li>
+            <li>交易流水面板</li>
+            <li>CSV 导入导出面板</li>
+            <li>迁移和快照面板</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>质量保障</h3>
+          <ul>
+            <li>主组合 smoke test</li>
+            <li>交易重建 smoke test</li>
+            <li>导入导出 smoke test</li>
+            <li>迁移、快照、风险 smoke test</li>
+            <li>lint、build、HTTP 访问验证</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="prd">
+      <h2>PRD 对照状态</h2>
+      <table>
+        <thead>
+          <tr><th>需求模块</th><th>状态</th><th>当前说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>统一资产看板</td><td><span class="tag partial">基础完成</span></td><td>已有汇总和风险摘要，仍缺趋势图、组合卡片和更强可视化。</td></tr>
+          <tr><td>细粒度持仓管理</td><td><span class="tag done">基本完成</span></td><td>支持多基金、多资产类别、现金和手动资产。</td></tr>
+          <tr><td>投资组合管理</td><td><span class="tag done">基本完成</span></td><td>支持创建、编辑、删除、归档、模板和自定义比例。</td></tr>
+          <tr><td>交易与本金记录</td><td><span class="tag done">基本完成</span></td><td>交易引擎、流水表、本金记录和 baseline 重建已具备。</td></tr>
+          <tr><td>再平衡建议</td><td><span class="tag done">基本完成</span></td><td>已有建议、智能现金流、交易草案和应用草案。</td></tr>
+          <tr><td>历史归档</td><td><span class="tag done">基本完成</span></td><td>支持手动快照和自动每日快照选项。</td></tr>
+          <tr><td>导入导出</td><td><span class="tag partial">中等完成</span></td><td>JSON/CSV 已具备，XLSM 映射和冲突 UX 待补。</td></tr>
+          <tr><td>回测与相关性</td><td><span class="tag partial">初步完成</span></td><td>手动净值序列已支持，历史 NAV 和相关性矩阵待实现。</td></tr>
+          <tr><td>AI 分析</td><td><span class="tag todo">未开始</span></td><td>P2 阶段，当前未实现。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="slide">
+      <h2>验证状态</h2>
+      <div class="two-col">
+        <div class="panel">
+          <h3>已通过命令</h3>
+          <ul>
+            <li><code>npm run lint</code></li>
+            <li><code>npm run build</code></li>
+            <li><code>node scripts/portfolio-smoke-test.mjs</code></li>
+            <li><code>node scripts/portfolio-import-smoke-test.mjs</code></li>
+            <li><code>node scripts/portfolio-transaction-smoke-test.mjs</code></li>
+            <li><code>node scripts/portfolio-dashboard-smoke-test.mjs</code></li>
+            <li><code>node scripts/portfolio-migration-smoke-test.mjs</code></li>
+            <li><code>node scripts/portfolio-snapshot-smoke-test.mjs</code></li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>验证边界</h3>
+          <ul>
+            <li>纯模块测试覆盖较完整。</li>
+            <li>Next.js 生产构建通过。</li>
+            <li>HTTP 本地访问返回 200。</li>
+            <li>浏览器级交互回归仍需补齐。</li>
+            <li>Supabase 多设备同步仍需真实环境验证。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="todo">
+      <h2>剩余待办总览</h2>
+      <table>
+        <thead>
+          <tr><th>优先级</th><th>待办</th><th>目标</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>P0</td><td>导入冲突提示增强</td><td>让用户知道哪些记录被跳过、覆盖或合并。</td></tr>
+          <tr><td>P0</td><td>交易编辑/删除体验</td><td>增加确认、影响说明和失败提示。</td></tr>
+          <tr><td>P0</td><td>浏览器级回归测试</td><td>覆盖组合创建、持仓、交易、再平衡、CSV、迁移和快照。</td></tr>
+          <tr><td>P0</td><td>中文乱码清理</td><td>修复组合工作区、风险提示和 tab 文案可读性。</td></tr>
+          <tr><td>P1</td><td>Dashboard 图表和组合卡片</td><td>补齐资产趋势、收益率、分布、组合对比。</td></tr>
+          <tr><td>P1</td><td>XLSM/Excel 字段映射</td><td>承接当前永久投资组合表格。</td></tr>
+          <tr><td>P1</td><td>历史 NAV 回测和相关性矩阵</td><td>把工具从记账扩展到组合研究。</td></tr>
+          <tr><td>P2</td><td>AI 摘要和组合报告</td><td>提供自然语言分析和月报/季报输出。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="slide">
+      <h2>主要风险</h2>
+      <div class="three-col">
+        <div class="panel">
+          <h3>技术风险</h3>
+          <ul>
+            <li>`page.jsx` 仍较单体。</li>
+            <li>localStorage 是主数据库，迁移必须保守。</li>
+            <li>ESM warning 会影响验证输出清晰度。</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>产品风险</h3>
+          <ul>
+            <li>导入冲突解释不足会降低信任。</li>
+            <li>再平衡草案需要更强解释性。</li>
+            <li>乱码文案影响汇报和使用体验。</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>质量风险</h3>
+          <ul>
+            <li>浏览器级测试未闭环。</li>
+            <li>Supabase 同步未实测。</li>
+            <li>复杂 UI 流程仍需手工验收。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="roadmap">
+      <h2>建议路线图</h2>
+      <div class="roadmap">
+        <div class="stage">
+          <strong>A</strong>
+          <div>
+            <h3>P0 收口和质量门</h3>
+            <p>清理乱码、增强导入和交易提示、补浏览器回归测试，把 MVP 从“已接通”推进到“可放心日常使用”。</p>
+          </div>
+        </div>
+        <div class="stage">
+          <strong>B</strong>
+          <div>
+            <h3>Dashboard 可视化增强</h3>
+            <p>增加组合卡片、资产分布、净值趋势、收益率趋势和贡献分析图形化呈现。</p>
+          </div>
+        </div>
+        <div class="stage">
+          <strong>C</strong>
+          <div>
+            <h3>迁移和回测深化</h3>
+            <p>完成 XLSM/Excel 映射，接入基金历史 NAV，生成组合净值序列和相关性矩阵。</p>
+          </div>
+        </div>
+        <div class="stage">
+          <strong>D</strong>
+          <div>
+            <h3>同步和智能报告</h3>
+            <p>完成 Supabase 多设备验证，增加 AI 摘要、组合报告和更完整的再平衡解释。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <h2>汇报结尾</h2>
+      <div class="two-col">
+        <div>
+          <p class="lead" style="color: var(--ink)">当前项目已经进入“核心闭环可用，质量和体验待收口”的阶段。</p>
+          <p>下一步不建议立刻开大功能，而应先完成 P0 收口：浏览器级回归、导入/交易提示、乱码修复和同步验证。之后再进入 dashboard 可视化、Excel 迁移和历史 NAV 回测。</p>
+        </div>
+        <div class="panel">
+          <h3>交付物</h3>
+          <ul>
+            <li>汇总底稿：<code>docs/presentation.md</code></li>
+            <li>HTML 汇报页：<code>docs/presentation.html</code></li>
+            <li>进展源文档：<code>docs/portfolio-current-progress-2026-05-12.md</code></li>
+            <li>测试矩阵：<code>docs/portfolio-test-cases.md</code></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

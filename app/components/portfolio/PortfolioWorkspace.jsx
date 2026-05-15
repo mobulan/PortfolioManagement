@@ -5,6 +5,7 @@ import { Info, Plus, Save, Trash2, WalletCards } from 'lucide-react';
 import {
   ASSET_CLASSES,
   buildPortfolioHoldingFromDraft,
+  getPortfolioHoldingDraftErrors,
   createDefaultPortfolio,
   normalizePortfolioFundCandidate,
   calculatePortfolioSummary,
@@ -124,6 +125,7 @@ export default function PortfolioWorkspace({
   const [importAnalysis, setImportAnalysis] = useState(null);
   const [csvText, setCsvText] = useState('');
   const [csvAnalysis, setCsvAnalysis] = useState(null);
+  const [holdingDraftErrors, setHoldingDraftErrors] = useState([]);
 
   const activePortfolios = useMemo(
     () => portfolios.filter((portfolio) => !portfolio.archived),
@@ -327,6 +329,9 @@ export default function PortfolioWorkspace({
 
   const addHolding = () => {
     if (!selectedPortfolio) return;
+    const errors = getPortfolioHoldingDraftErrors(holdingDraft);
+    setHoldingDraftErrors(errors);
+    if (errors.length) return;
     const holding = buildPortfolioHoldingFromDraft({
       portfolioId: selectedPortfolio.id,
       draft: holdingDraft,
@@ -345,6 +350,7 @@ export default function PortfolioWorkspace({
       valueMode: 'amount',
     });
     setHoldingFundMatches([]);
+    setHoldingDraftErrors([]);
   };
 
   const selectHoldingFund = async (fund) => {
@@ -628,7 +634,7 @@ export default function PortfolioWorkspace({
     <section className="portfolio-workspace">
       <div className="portfolio-toolbar glass">
         <div>
-          <span className="muted">Portfolio Management</span>
+          <span className="muted">组合管理</span>
           <h2>投资组合</h2>
           <p>先设定目标比例，再录入持仓和交易，系统会按偏离度给出再平衡建议。</p>
         </div>
@@ -711,25 +717,25 @@ export default function PortfolioWorkspace({
                 <table className="portfolio-table">
                   <thead>
                     <tr>
-                      <th>Risk / contribution</th>
-                      <th>Value</th>
+                      <th>风险 / 贡献</th>
+                      <th>数值</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td>Alerts</td>
-                      <td>{selectedRiskMetrics.alertSummary.total} total, {selectedRiskMetrics.alertSummary.high} high</td>
+                      <td>风险提醒</td>
+                      <td>共 {selectedRiskMetrics.alertSummary.total} 条，高风险 {selectedRiskMetrics.alertSummary.high} 条</td>
                     </tr>
                     <tr>
-                      <td>Snapshots</td>
+                      <td>快照数量</td>
                       <td>{selectedRiskMetrics.trend.snapshotCount}</td>
                     </tr>
                     <tr>
-                      <td>Latest value change</td>
+                      <td>最近资产变化</td>
                       <td>¥{money(selectedRiskMetrics.trend.latestChange)}</td>
                     </tr>
                     <tr>
-                      <td>Max drawdown</td>
+                      <td>最大回撤</td>
                       <td>{pct(selectedRiskMetrics.trend.maxDrawdown)}</td>
                     </tr>
                   </tbody>
@@ -907,14 +913,16 @@ export default function PortfolioWorkspace({
           <PortfolioMigrationPanel
             preview={legacyMigrationPreview}
             onRunMigration={runLegacyMigration}
-            title="Legacy holdings migration"
+            eyebrow="历史持仓迁移"
+            title="全局持仓迁移"
+            actionLabel="迁移持仓"
           />
           <PortfolioMigrationPanel
             preview={groupMigrationPreview}
             onRunMigration={runGroupMigration}
-            eyebrow="Group migration"
-            title="Group holdings migration"
-            actionLabel="Migrate group holdings"
+            eyebrow="分组持仓迁移"
+            title="分组持仓迁移"
+            actionLabel="迁移分组持仓"
           />
           <Panel title="新增持仓">
             <p className="portfolio-panel-intro">基金可填写代码自动匹配名称；现金和手动资产可直接填名称与金额。</p>
@@ -924,9 +932,18 @@ export default function PortfolioWorkspace({
                 <option value="cash">现金</option>
                 <option value="manual">手动资产</option>
               </select>
-              <select className="select" value={holdingDraft.assetClassId} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, assetClassId: e.target.value }))}>
-                {ASSET_CLASSES.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-              </select>
+              <div className="portfolio-asset-class-buttons" role="group" aria-label="资产类别">
+                {ASSET_CLASSES.map((row) => (
+                  <button
+                    key={row.id}
+                    type="button"
+                    className={holdingDraft.assetClassId === row.id ? 'is-active' : ''}
+                    onClick={() => setHoldingDraft((prev) => ({ ...prev, assetClassId: row.id }))}
+                  >
+                    {row.name}
+                  </button>
+                ))}
+              </div>
               <div className="portfolio-code-name-field">
                 <div className="portfolio-code-name-row">
                   <input className="input" value={holdingDraft.fundCode} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, fundCode: e.target.value }))} placeholder="代码" />
@@ -948,7 +965,7 @@ export default function PortfolioWorkspace({
                 <button type="button" className={holdingDraft.valueMode === 'amount' ? 'is-active' : ''} onClick={() => setHoldingDraft((prev) => ({ ...prev, valueMode: 'amount' }))}>按市值录入</button>
                 <button type="button" className={holdingDraft.valueMode === 'share' ? 'is-active' : ''} onClick={() => setHoldingDraft((prev) => ({ ...prev, valueMode: 'share' }))}>按份额录入</button>
               </div>
-              <input className="input" value={holdingDraft.costAmount} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, costAmount: e.target.value }))} placeholder="本金/成本金额" />
+              <input className="input" value={holdingDraft.costAmount} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, costAmount: e.target.value }))} placeholder="本金/成本金额，例如 39,202.20" />
               {holdingDraft.valueMode === 'amount' ? (
                 <input className="input" value={holdingDraft.manualValue} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, manualValue: e.target.value }))} placeholder="当前市值" />
               ) : (
@@ -956,6 +973,11 @@ export default function PortfolioWorkspace({
                   <input className="input" value={holdingDraft.share} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, share: e.target.value }))} placeholder="份额" />
                   <input className="input" value={holdingDraft.estimatedNav} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, estimatedNav: e.target.value }))} placeholder="估算净值" />
                 </>
+              )}
+              {holdingDraftErrors.length > 0 && (
+                <ul className="portfolio-import-errors" role="alert">
+                  {holdingDraftErrors.map((error) => <li key={error}>{error}</li>)}
+                </ul>
               )}
               <button type="button" className="button" onClick={addHolding}><Plus size={16} />添加持仓</button>
             </div>
