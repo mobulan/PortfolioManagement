@@ -27,6 +27,7 @@ import {
 import Announcement from "./components/Announcement";
 import EmptyStateCard from "./components/EmptyStateCard";
 import FundCard from "./components/FundCard";
+import FundDataSourceSelector from "./components/FundDataSourceSelector";
 import GroupSummary from "./components/GroupSummary";
 import GroupAccountSummaryCard from "./components/GroupAccountSummaryCard";
 import {
@@ -84,7 +85,7 @@ import MarketIndexAccordion from "./components/MarketIndexAccordion";
 import SortSettingModal from "./components/SortSettingModal";
 import githubImg from "./assets/github.svg";
 import { supabase, isSupabaseConfigured } from './lib/supabase';
-import { recordValuation, getAllValuationSeries, clearFund } from './lib/valuationTimeseries';
+import { recordValuation, setValuationSeries as persistValuationSeries, getAllValuationSeries, getAllValuationSeriesRaw, clearFund } from './lib/valuationTimeseries';
 import {
   DAILY_EARNINGS_SCOPE_ALL,
   aggregatePortfolioDailyEarnings,
@@ -406,6 +407,7 @@ export default function HomePage() {
   const [convertModal, setConvertModal] = useState({ open: false, fund: null });
   const [selectFundSingleModal, setSelectFundSingleModal] = useState({ open: false, excludeCodes: [], initialSelectedCode: '' });
   const [selectHoldingGroupModal, setSelectHoldingGroupModal] = useState({ open: false, fund: null });
+  const [dataSourceModal, setDataSourceModal] = useState({ open: false, fund: null });
   const [dcaModal, setDcaModal] = useState({ open: false, fund: null });
   const [clearConfirm, setClearConfirm] = useState(null); // { fund }
   const [donateOpen, setDonateOpen] = useState(false);
@@ -574,16 +576,14 @@ export default function HomePage() {
       }
     } else {
       // 否则使用估值
-      currentNav = fund.estPricedCoverage > 0.05
-        ? fund.estGsz
-        : (isNumber(fund.gsz) ? fund.gsz : Number(fund.dwjz));
+      currentNav = isNumber(fund.gsz) ? fund.gsz : Number(fund.dwjz);
 
       if (!currentNav) return null;
 
       if (canCalcTodayProfit) {
         const amount = shareForTodayProfit * currentNav;
         // 估算涨幅
-        const gzChange = fund.estPricedCoverage > 0.05 ? fund.estGszzl : (Number(fund.gszzl) || 0);
+        const gzChange = Number(fund.gszzl) || 0;
         profitToday = amount - (amount / (1 + gzChange / 100));
       } else {
         profitToday = null;
@@ -779,9 +779,7 @@ export default function HomePage() {
         }
         const ev = fund.noValuation
           ? null
-          : fund.estPricedCoverage > 0.05
-            ? (isNumber(fund.estGszzl) ? Number(fund.estGszzl) : null)
-            : (isNumber(fund.gszzl) ? Number(fund.gszzl) : null);
+          : (isNumber(fund.gszzl) ? Number(fund.gszzl) : null);
         if (ev != null && Number.isFinite(ev)) {
           if (ev > 0) upCount += 1;
           else if (ev < 0) downCount += 1;
@@ -848,9 +846,7 @@ export default function HomePage() {
         }
         const ev = fund.noValuation
           ? null
-          : fund.estPricedCoverage > 0.05
-            ? (isNumber(fund.estGszzl) ? Number(fund.estGszzl) : null)
-            : (isNumber(fund.gszzl) ? Number(fund.gszzl) : null);
+          : (isNumber(fund.gszzl) ? Number(fund.gszzl) : null);
         if (ev != null && Number.isFinite(ev)) {
           if (ev > 0) upCount += 1;
           else if (ev < 0) downCount += 1;
@@ -1304,15 +1300,8 @@ export default function HomePage() {
           const getYieldValue = (fund) => {
             // 与 estimateChangePercent 展示逻辑对齐：
             // - noValuation 为 true 一律视为无“估算涨幅”
-            // - 有估值覆盖时用 estGszzl
-            // - 否则仅在 gszzl 为数字时使用 gszzl
+            // - 仅在 gszzl 为数字时使用 gszzl
             if (fund.noValuation) {
-              return { value: 0, hasValue: false };
-            }
-            if (fund.estPricedCoverage > 0.05) {
-              if (isNumber(fund.estGszzl)) {
-                return { value: fund.estGszzl, hasValue: true };
-              }
               return { value: 0, hasValue: false };
             }
             if (isNumber(fund.gszzl)) {
@@ -1388,7 +1377,7 @@ export default function HomePage() {
 
             const principal = holding && isNumber(holding.cost) && isNumber(holding.share) ? holding.cost * holding.share : 0;
             const hasTodayEstimate = !f.noValuation && isString(f.gztime) && f.gztime.startsWith(todayStr);
-            const estimateChangeValue = f.noValuation ? null : (f.estPricedCoverage > 0.05 ? (isNumber(f.estGszzl) ? Number(f.estGszzl) : null) : (isNumber(f.gszzl) ? Number(f.gszzl) : null));
+            const estimateChangeValue = f.noValuation ? null : (isNumber(f.gszzl) ? Number(f.gszzl) : null);
             const holdingProfitPercentValue = total != null && principal > 0 ? (total / principal) * 100 : null;
             const hasEstimatePercent = hasTodayEstimate && estimateChangeValue != null;
             const hasHoldingPercent = holdingProfitPercentValue != null;
@@ -1524,9 +1513,7 @@ export default function HomePage() {
         const latestNav = f.dwjz != null && f.dwjz !== '' ? (typeof f.dwjz === 'number' ? Number(f.dwjz).toFixed(4) : String(f.dwjz)) : '—';
         const estimateNav = f.noValuation
           ? '—'
-          : (f.estPricedCoverage > 0.05
-            ? (f.estGsz != null ? Number(f.estGsz).toFixed(4) : '—')
-            : (f.gsz != null ? (typeof f.gsz === 'number' ? Number(f.gsz).toFixed(4) : String(f.gsz)) : '—'));
+          : (f.gsz != null ? (typeof f.gsz === 'number' ? Number(f.gsz).toFixed(4) : String(f.gsz)) : '—');
 
         const yesterdayChangePercent =
           f.zzl != null && f.zzl !== ''
@@ -1538,18 +1525,12 @@ export default function HomePage() {
 
         const estimateChangePercent = f.noValuation
           ? '—'
-          : (f.estPricedCoverage > 0.05
-            ? (f.estGszzl != null
-              ? `${f.estGszzl > 0 ? '+' : ''}${Number(f.estGszzl).toFixed(2)}%`
-              : '—')
-            : (isNumber(f.gszzl)
-              ? `${f.gszzl > 0 ? '+' : ''}${Number(f.gszzl).toFixed(2)}%`
-              : (f.gszzl ?? '—')));
+          : (isNumber(f.gszzl)
+            ? `${f.gszzl > 0 ? '+' : ''}${Number(f.gszzl).toFixed(2)}%`
+            : (f.gszzl ?? '—'));
         const estimateChangeValue = f.noValuation
           ? null
-          : (f.estPricedCoverage > 0.05
-            ? (isNumber(f.estGszzl) ? Number(f.estGszzl) : null)
-            : (isNumber(f.gszzl) ? Number(f.gszzl) : null));
+          : (isNumber(f.gszzl) ? Number(f.gszzl) : null);
         const estimateTime = f.noValuation ? (f.jzrq || '-') : (f.gztime || f.time || '-');
         const hasTodayEstimate = !f.noValuation && isString(f.gztime) && f.gztime.startsWith(todayStr);
 
@@ -1673,10 +1654,6 @@ export default function HomePage() {
         const sinceAddedCurrentNav = (() => {
           if (f.noValuation) {
             const v = Number(f.dwjz);
-            return Number.isFinite(v) && v > 0 ? v : null;
-          }
-          if (f.estPricedCoverage > 0.05) {
-            const v = Number(f.estGsz);
             return Number.isFinite(v) && v > 0 ? v : null;
           }
           const v = Number(f.gsz);
@@ -2445,6 +2422,11 @@ export default function HomePage() {
       }
       dirtyKeysRef.current.add(key);
 
+      // fundValuationTimeseries 参与云端同步，但不主动触发同步，等待其他操作触发时一并提交
+      if (key === 'fundValuationTimeseries') {
+        return;
+      }
+
       if (!skipSyncRef.current) {
         const now = nowInTz().toISOString();
         storageStore.setItem('localUpdatedAt', now);
@@ -2460,7 +2442,7 @@ export default function HomePage() {
   }, [setOnSync, scheduleSync]);
 
   useEffect(() => {
-    // 仅以下 key 的变更会触发云端同步；fundValuationTimeseries 不在其中
+    // 仅以下 key 的跨标签页变更会触发云端同步；fundValuationTimeseries 采用跟随同步策略，不主动触发
     const keys = new Set(['funds', 'tags', 'favorites', 'groups', 'collapsedCodes', 'collapsedTrends', 'collapsedEarnings', 'refreshMs', 'holdings', 'groupHoldings', 'pendingTrades', 'dcaPlans', 'customSettings', 'fundDailyEarnings']);
     const onStorage = (e) => {
       if (!e.key) return;
@@ -3359,7 +3341,7 @@ export default function HomePage() {
         }
        setTempSeconds(Math.round(useStorageStore.getState().refreshMs / 1000));
        // 加载估值分时记录（用于分时图）
-      setValuationSeries(getAllValuationSeries());
+      setValuationSeries(getAllValuationSeries(funds));
       // 加载自选状态：只保留存在于 funds 中的 code，避免“自选数量 > 全部数量”
       const savedFavorites = Array.from(favorites);
       const storedFundCodeSet = new Set(funds.map((f) => f?.code).filter(Boolean));
@@ -3705,7 +3687,7 @@ export default function HomePage() {
         const nextSeries = {};
         added.forEach(u => {
           if (u?.code != null && !u.noValuation && Number.isFinite(Number(u.gsz))) {
-            nextSeries[u.code] = recordValuation(u.code, { gsz: u.gsz, gztime: u.gztime });
+            nextSeries[u.code] = recordValuation(u.code, { gsz: u.gsz, gztime: u.gztime }, 1);
           }
         });
         if (Object.keys(nextSeries).length > 0) setValuationSeries(prev => ({ ...prev, ...nextSeries }));
@@ -3741,7 +3723,7 @@ export default function HomePage() {
         const nextSeries = {};
         newFunds.forEach(u => {
           if (u?.code != null && !u.noValuation && Number.isFinite(Number(u.gsz))) {
-            nextSeries[u.code] = recordValuation(u.code, { gsz: u.gsz, gztime: u.gztime });
+            nextSeries[u.code] = recordValuation(u.code, { gsz: u.gsz, gztime: u.gztime }, 1);
           }
         });
         if (Object.keys(nextSeries).length > 0) setValuationSeries(prev => ({ ...prev, ...nextSeries }));
@@ -3924,7 +3906,7 @@ export default function HomePage() {
 
         const oldData = getStoredFundSnapshot(c);
         // 估值查询失败或返回空 gsz 时复用本地上一轮有效估值，避免界面估清；持仓/净值仍用本轮接口结果。
-        const hasValidGsz = (row) => Number.isFinite(Number(row?.gsz));
+        const hasValidGsz = (row) => row?.gsz != null && row?.gsz !== '' && Number.isFinite(Number(row?.gsz));
         if (oldData && !hasValidGsz(data) && hasValidGsz(oldData)) {
           data.gsz = oldData.gsz;
           data.gszzl = oldData.gszzl;
@@ -3935,26 +3917,24 @@ export default function HomePage() {
 
         updated.push(data);
 
-        // 【步骤 3.2】估值时序记录：提取实时估值点（gsz），用于绘制分时图
+        // 【步骤 3.2】估值时序记录
+        const storedFund = getStoredFundSnapshot(data.code);
+        const fundDs = storedFund?.dataSource || 1;
         if (data.code != null && !data.noValuation && Number.isFinite(Number(data.gsz))) {
-          const value = Number(data.gsz);
-          const gztime = data.gztime ?? null;
-          const dateStr = (isString(gztime) && /^\d{4}-\d{2}-\d{2}/.test(gztime))
-            ? gztime.slice(0, 10)
-            : dayjs().tz(TZ).format('YYYY-MM-DD');
-          const timeLabel = (isString(gztime) && gztime.length > 10)
-            ? gztime.slice(11, 16)
-            : dayjs().tz(TZ).format('HH:mm');
-
-          const list = Array.isArray(nextValuationSeries[data.code]) ? nextValuationSeries[data.code] : [];
-          const lastDate = list.length ? list[list.length - 1].date : '';
-
-          if (dateStr > lastDate) {
-            nextValuationSeries[data.code] = [{ time: timeLabel, value, date: dateStr }];
-            valuationChanged = true;
-          } else if (dateStr === lastDate) {
-            if (!list.some(p => p.time === timeLabel)) {
-              nextValuationSeries[data.code] = [...list, { time: timeLabel, value, date: dateStr }];
+          if (data.fundValuationTimeseries && isPlainObject(data.fundValuationTimeseries)) {
+            // 数据源 2/3：使用 API 返回的完整分时序列，写入对应数据源桶
+            for (const [tsCode, tsList] of Object.entries(data.fundValuationTimeseries)) {
+              if (Array.isArray(tsList) && tsList.length > 0) {
+                persistValuationSeries(tsCode, fundDs, tsList);
+                nextValuationSeries[tsCode] = tsList;
+                valuationChanged = true;
+              }
+            }
+          } else {
+            // 数据源 1：逐点记录分时估值
+            const recorded = recordValuation(data.code, { gsz: data.gsz, gztime: data.gztime }, fundDs);
+            if (recorded) {
+              nextValuationSeries[data.code] = recorded;
               valuationChanged = true;
             }
           }
@@ -4036,6 +4016,10 @@ export default function HomePage() {
 
               const start = addDays(lastRecordedDate, 1);
               const navRows = await fetchFundNetValueRange(data.code, lastRecordedDate, latestNavDate);
+              if (Number.isFinite(latestNav) && latestNav > 0 && !navRows.some(r => r.date === latestNavDate)) {
+                navRows.push({ date: latestNavDate, nav: latestNav });
+                navRows.sort((a, b) => a.date.localeCompare(b.date));
+              }
               if (fundCodeStillInStorage(data.code)) {
                 for (const r of navRows) navCache.set(r.date, r.nav);
                 const firstIdx = navRows.findIndex((r) => r.date >= start);
@@ -4059,6 +4043,17 @@ export default function HomePage() {
                   }
                 }
               }
+            } else if (isValidDateStr(lastRecordedDate) && lastRecordedDate === latestNavDate) {
+              // 当日收益已记录但净值可能已更新，用最新净值重新计算当日收益
+              const share = getEffectiveShare(latestNavDate);
+              const unitCost = Number(h?.cost);
+              const baseCostAmount = Number.isFinite(unitCost) && unitCost > 0 ? unitCost * share : null;
+              if (share > 0) {
+                const v = calcLatestDayFromFund(data, share, baseCostAmount);
+                if (v && Number.isFinite(v.earnings) && fundCodeStillInStorage(data.code)) {
+                  localRecordToChanges(scope, data.code, v.earnings, latestNavDate, v.rate, baseCostAmount, true);
+                }
+              }
             }
           }
         } catch (e) {
@@ -4080,6 +4075,7 @@ export default function HomePage() {
             if (f.addedAt != null) merged.addedAt = f.addedAt;
             if (f.addBaseNav != null) merged.addBaseNav = f.addBaseNav;
             if (f.addBaseDate != null) merged.addBaseDate = f.addBaseDate;
+            if (f.dataSource != null) merged.dataSource = f.dataSource;
             if (merged.addedAt == null || merged.addBaseNav == null || merged.addBaseDate == null) {
               const snap = getAddBaseSnapshotFromFund(merged);
               if (merged.addedAt == null) merged.addedAt = Date.now();
@@ -4099,7 +4095,6 @@ export default function HomePage() {
             });
             return next;
           });
-          storageStore.setItem('fundValuationTimeseries', JSON.stringify(nextValuationSeries));
         }
       }
 
@@ -5154,7 +5149,10 @@ export default function HomePage() {
   const collectLocalPayload = (keys = null) => {
     try {
       const all = {};
-      // 不包含 fundValuationTimeseries，该数据暂不同步到云端
+      // 不包含 fundValuationTimeseries（作为频繁更新数据，仅在全量同步或特定触发时同步，不加入实时同步键列表）
+      if (!keys || keys.has('fundValuationTimeseries')) {
+        all.fundValuationTimeseries = storageStore.getItem('fundValuationTimeseries', {});
+      }
       if (!keys || keys.has('funds')) {
         all.funds = storageStore.getItem('funds', []);
       }
@@ -5396,7 +5394,8 @@ export default function HomePage() {
           portfolioSnapshots: Array.isArray(all.portfolioSnapshots) ? all.portfolioSnapshots : [],
           portfolioBacktests: Array.isArray(all.portfolioBacktests) ? all.portfolioBacktests : [],
           portfolioSettings: isPlainObject(all.portfolioSettings) ? all.portfolioSettings : {},
-          portfolioSchemaVersion: Number(all.portfolioSchemaVersion) || 1
+          portfolioSchemaVersion: Number(all.portfolioSchemaVersion) || 1,
+          fundValuationTimeseries: isPlainObject(all.fundValuationTimeseries) ? all.fundValuationTimeseries : {}
         };
       }
 
@@ -5673,6 +5672,61 @@ export default function HomePage() {
       }
       if (hasOwn(cloudData, 'portfolioSettings')) {
         setPortfolioSettings(isPlainObject(cloudData.portfolioSettings) ? cloudData.portfolioSettings : {});
+      }
+
+      if (hasOwn(cloudData, 'fundValuationTimeseries')) {
+        const nextTimeseries = isPlainObject(cloudData.fundValuationTimeseries) ? cloudData.fundValuationTimeseries : {};
+        const localTimeseries = storageStore.getItem('fundValuationTimeseries', {});
+        const mergedTimeseries = { ...localTimeseries };
+
+        // 兼容旧格式（扁平）和新格式（分数据源）
+        const mergeSeries = (cloudArr, localArr) => {
+          const pointsMap = new Map();
+          localArr.forEach(pt => {
+            if (pt && pt.date && pt.time) pointsMap.set(`${pt.date}_${pt.time}`, pt);
+          });
+          cloudArr.forEach(pt => {
+            if (pt && pt.date && pt.time) pointsMap.set(`${pt.date}_${pt.time}`, pt);
+          });
+          let mergedArr = Array.from(pointsMap.values()).sort((a, b) => {
+            if (a.date !== b.date) return a.date.localeCompare(b.date);
+            return a.time.localeCompare(b.time);
+          });
+          const maxDate = mergedArr.reduce((max, pt) => (pt.date > max ? pt.date : max), '');
+          if (maxDate) mergedArr = mergedArr.filter(pt => pt.date === maxDate);
+          return mergedArr;
+        };
+
+        Object.keys(nextTimeseries).forEach(code => {
+          if (!nextFundCodes.has(code)) return;
+          const cloudEntry = nextTimeseries[code];
+          const localEntry = mergedTimeseries[code];
+          // 旧格式：{ [code]: [...] }
+          if (Array.isArray(cloudEntry)) {
+            const localArr = Array.isArray(localEntry) ? localEntry : [];
+            mergedTimeseries[code] = { '1': mergeSeries(cloudEntry, localArr) };
+            return;
+          }
+          // 新格式：{ [code]: { [ds]: [...] } }
+          if (isPlainObject(cloudEntry)) {
+            const localDsMap = isPlainObject(localEntry) ? localEntry : {};
+            const mergedDsMap = { ...localDsMap };
+            Object.keys(cloudEntry).forEach(ds => {
+              if (!Array.isArray(cloudEntry[ds])) return;
+              const localArr = Array.isArray(mergedDsMap[ds]) ? mergedDsMap[ds] : [];
+              mergedDsMap[ds] = mergeSeries(cloudEntry[ds], localArr);
+            });
+            mergedTimeseries[code] = mergedDsMap;
+          }
+        });
+
+        const cleanedTimeseries = {};
+        Object.keys(mergedTimeseries).forEach(code => {
+          if (nextFundCodes.has(code)) {
+            cleanedTimeseries[code] = mergedTimeseries[code];
+          }
+        });
+        storageStore.setItem('fundValuationTimeseries', JSON.stringify(cleanedTimeseries));
       }
 
       if (isPlainObject(cloudData.customSettings)) {
@@ -6438,6 +6492,32 @@ export default function HomePage() {
 
     setHoldingModal({ open: true, fund });
   }, [activeGroupId, currentTab, groupHoldings, holdings, linkedHoldingsForAllFav]);
+  const openDataSourceModal = useCallback((fund) => {
+    setDataSourceModal({ open: true, fund });
+  }, []);
+
+  const handleDataSourceSelect = useCallback((fundCode, sourceId) => {
+    setFunds((prev) => {
+      const next = [...prev];
+      const idx = next.findIndex(f => f.code === fundCode);
+      if (idx !== -1) {
+        next[idx] = {
+          ...next[idx],
+          dataSource: sourceId,
+          gsz: null,
+          gszzl: null,
+          gztime: null,
+          valuationSource: null,
+          noValuation: false
+        };
+      }
+      return next;
+    });
+    // Immediately fetch new data for this fund so the UI updates
+    refreshAll([fundCode]);
+    showToast('切换数据源成功', 'success');
+  }, [setFunds]); // refreshAll is omitted from deps to avoid loop, it's stable enough in page scope
+
   const openActionModal = useCallback((fund) => {
     const code = fund?.code;
     if ((currentTab === 'all' || currentTab === 'fav') && code && linkedHoldingsForAllFav.linked?.has?.(code)) {
@@ -6457,7 +6537,7 @@ export default function HomePage() {
     const fund = row?.rawFund || (row ? { code: row.code, name: row.fundName } : null);
     if (!fund) return {};
     return {
-      fund,
+      fundCode: fund.code,
       todayStr,
       currentTab,
       favorites,
@@ -6478,6 +6558,7 @@ export default function HomePage() {
       onRemoveFund: handleRemoveFundEntry,
       onHoldingClick: openHoldingModal,
       onActionClick: openActionModal,
+      onDataSourceClick: openDataSourceModal,
       onPercentModeToggle: togglePercentMode,
       onTodayPercentModeToggle: toggleTodayPercentMode,
       onToggleCollapse: toggleCollapse,
@@ -6511,6 +6592,7 @@ export default function HomePage() {
     handleRemoveFundEntry,
     openHoldingModal,
     openActionModal,
+    openDataSourceModal,
     togglePercentMode,
     toggleTodayPercentMode,
     toggleCollapse,
@@ -7242,7 +7324,7 @@ export default function HomePage() {
                           style={{ position: 'relative', overflow: 'hidden' }}
                         >
                             <FundCard
-                              fund={f}
+                              fundCode={f.code}
                               isHoldingLinked={
                                 (currentTab === 'all' || currentTab === 'fav') &&
                                 linkedHoldingsForAllFav.linked?.has?.(f?.code)
@@ -7267,6 +7349,7 @@ export default function HomePage() {
                               onRemoveFund={handleRemoveFundEntry}
                               onHoldingClick={openHoldingModal}
                               onActionClick={openActionModal}
+                              onDataSourceClick={openDataSourceModal}
                               onPercentModeToggle={togglePercentMode}
                               onTodayPercentModeToggle={toggleTodayPercentMode}
                               onToggleCollapse={toggleCollapse}
@@ -7598,6 +7681,16 @@ export default function HomePage() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {dataSourceModal.open && dataSourceModal.fund && (
+          <FundDataSourceSelector
+            fund={dataSourceModal.fund}
+            onClose={() => setDataSourceModal({ open: false, fund: null })}
+            onSelect={(sourceId) => handleDataSourceSelect(dataSourceModal.fund.code, sourceId)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {actionModal.open && (
           <HoldingActionModal
             fund={actionModal.fund}
@@ -7704,7 +7797,6 @@ export default function HomePage() {
               const nav =
                 Number(f?.dwjz) ||
                 Number(f?.gsz) ||
-                Number(f?.estGsz) ||
                 0;
               if (!share || !nav) return 0;
               return share * nav;

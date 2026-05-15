@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { storageStore } from '../stores';
 
-const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v1.4.0';
+const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v1.4.1';
 
 export default function Announcement() {
   const [isVisible, setIsVisible] = useState(false);
@@ -78,12 +78,10 @@ export default function Announcement() {
               <span>公告</span>
             </div>
             <div style={{ color: 'var(--text)', lineHeight: '1.6', fontSize: '15px', overflowY: 'auto', minHeight: 0, flex: 1, paddingRight: '4px' }}>
-              <p>v1.4.0 更新内容如下：</p>
-              <p>1. 新增更新日志。</p>
-              <p>2. 完成使用帮助文档。</p>
-              <p>3. 修复我的收益数据问题。</p>
-              <p>感谢上月以下用户对本项目赞助支持（排名不分先后）。</p>
-              <p>坏哥²⁰²⁶、*风、*猫、*🍊、*舟、*S、文杰李、X*H、*心、大大方块先生、*民、Bonnie、*、、F、*烟、*明、**文、**举、*洋、**乐、**赛</p>
+              <p>v1.4.1 更新内容如下：</p>
+              <p>1. 新增估值数据源切换。</p>
+              <p>2. 实时估值数据加入云端存储。</p>
+              <p>3. 修复近1周、近1月等排序箭头不显示问题。</p>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
