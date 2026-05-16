@@ -9,6 +9,7 @@ import {
   createDefaultPortfolio,
   normalizePortfolioFundCandidate,
   calculatePortfolioSummary,
+  createAssetDriftDisplay,
   aggregateDashboard,
   buildDashboardRiskMetrics,
   calculateRebalancePlan,
@@ -16,6 +17,7 @@ import {
   createRebalanceTransactionDrafts,
   applyPortfolioTransaction,
   createPortfolioTransactionBaseline,
+  upsertPortfolioHoldingFund,
   createPortfolioSnapshot,
   prepareAutomaticDailySnapshot,
   exportPortfolioData,
@@ -35,6 +37,7 @@ import PortfolioDetailTabs from './PortfolioDetailTabs';
 import PortfolioEditorPanel from './PortfolioEditorPanel';
 import PortfolioHistoryImportPanel from './PortfolioHistoryImportPanel';
 import PortfolioMigrationPanel from './PortfolioMigrationPanel';
+import PortfolioSmartTradePanel from './PortfolioSmartTradePanel';
 import PortfolioTransactionsPanel from './PortfolioTransactionsPanel';
 
 const money = (value) => Number(value || 0).toLocaleString('zh-CN', {
@@ -77,6 +80,7 @@ const applyImportedRows = (currentRows = [], importedRows = [], conflictMode = '
 
 export default function PortfolioWorkspace({
   funds = [],
+  setFunds,
   legacyHoldings = {},
   groupHoldings = {},
   portfolios = [],
@@ -213,6 +217,7 @@ export default function PortfolioWorkspace({
     { id: 'holdings', label: '持仓', count: selectedHoldings.length },
     { id: 'transactions', label: '交易', count: portfolioTransactions.filter((tx) => tx.portfolioId === selectedPortfolio?.id).length },
     { id: 'rebalance', label: '再平衡' },
+    { id: 'smartTrade', label: '智能买卖' },
     { id: 'history', label: '历史', count: selectedSnapshots.length },
     { id: 'backtest', label: '回测' },
   ]), [portfolioTransactions, selectedHoldings.length, selectedPortfolio?.id, selectedSnapshots.length]);
@@ -337,6 +342,7 @@ export default function PortfolioWorkspace({
       draft: holdingDraft,
       funds: [...funds, ...holdingFundMatches],
     });
+    setFunds?.((prev) => upsertPortfolioHoldingFund(prev, holding, [...funds, ...holdingFundMatches]));
     setPortfolioHoldings((prev) => [...prev, holding]);
     setHoldingDraft({
       assetClassId: 'equity',
@@ -696,16 +702,39 @@ export default function PortfolioWorkspace({
               </div>
             )}
             <div className="portfolio-asset-bars">
-              {(selectedSummary?.assetClasses || []).length > 0 ? (selectedSummary?.assetClasses || []).map((row) => (
-                <div key={row.assetClassId} className="portfolio-asset-row">
-                  <span>{row.assetClassName}</span>
-                  <div className="portfolio-asset-track">
-                    <div style={{ width: `${Math.min(100, row.currentRatio * 100)}%` }} />
+              {(selectedSummary?.assetClasses || []).length > 0 ? (selectedSummary?.assetClasses || []).map((row) => {
+                const drift = createAssetDriftDisplay(row);
+                return (
+                <div key={row.assetClassId} className={`portfolio-asset-row is-${drift.tone}`}>
+                  <div className="portfolio-asset-head">
+                    <strong>{row.assetClassName}</strong>
+                    <em>{drift.statusText}</em>
                   </div>
-                  <strong>{pct(row.currentRatio)}</strong>
-                  <em>目标 {pct(row.targetRatio)}</em>
+                  <div className="portfolio-asset-meta">
+                    <span>当前 {pct(row.currentRatio)}</span>
+                    <span>目标 {pct(row.targetRatio)}</span>
+                    <span>区间 {pct(drift.lowerRatio)}-{pct(drift.upperRatio)}</span>
+                    <strong>{drift.driftText}</strong>
+                  </div>
+                  <div className="portfolio-asset-track" aria-label={`${row.assetClassName} 当前 ${pct(row.currentRatio)} 目标 ${pct(row.targetRatio)}`}>
+                    <div
+                      className="portfolio-asset-range"
+                      style={{
+                        left: `${drift.rangeStart}%`,
+                        width: `${Math.max(0, drift.rangeEnd - drift.rangeStart)}%`,
+                      }}
+                    />
+                    <i className="portfolio-asset-target" style={{ left: `${drift.targetPosition}%` }} aria-hidden="true" />
+                    <b className="portfolio-asset-current" style={{ left: `${drift.currentPosition}%` }} aria-hidden="true" />
+                  </div>
+                  <div className="portfolio-asset-axis" aria-hidden="true">
+                    <span>低配</span>
+                    <span>目标</span>
+                    <span>超配</span>
+                  </div>
                 </div>
-              )) : (
+                );
+              }) : (
                 <EmptyHint
                   title="还没有资产分布"
                   description="添加持仓后，这里会显示当前比例、目标比例和偏离情况。"
@@ -870,6 +899,15 @@ export default function PortfolioWorkspace({
           </Panel>
           )}
 
+          {activeDetailTab === 'smartTrade' && (
+            <PortfolioSmartTradePanel
+              portfolio={selectedPortfolio}
+              holdings={portfolioHoldings}
+              funds={funds}
+              onApplyDrafts={applyTransactionDrafts}
+            />
+          )}
+
           {activeDetailTab === 'history' && (
             <>
             <PortfolioHistoryImportPanel
@@ -925,7 +963,7 @@ export default function PortfolioWorkspace({
             actionLabel="迁移分组持仓"
           />
           <Panel title="新增持仓">
-            <p className="portfolio-panel-intro">基金可填写代码自动匹配名称；现金和手动资产可直接填名称与金额。</p>
+            <p className="portfolio-panel-intro">基金可填写代码自动匹配名称；添加基金持仓后会同步加入基估宝主界面基金列表，用于后续实时估值和智能买卖份额换算。</p>
             <div className="portfolio-form">
               <select className="select" value={holdingDraft.instrumentType} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, instrumentType: e.target.value }))}>
                 <option value="fund">基金/ETF</option>

@@ -8,6 +8,7 @@ import {
 } from '../app/lib/portfolio/schema.js';
 import {
   calculatePortfolioSummary,
+  createAssetDriftDisplay,
   summarizeAssetClasses,
 } from '../app/lib/portfolio/calculations.js';
 import {
@@ -38,6 +39,7 @@ import {
   findPortfolioFundCandidate,
   getPortfolioHoldingDraftErrors,
   parsePortfolioNumber,
+  upsertPortfolioHoldingFund,
 } from '../app/lib/portfolio/holdingForm.js';
 import {
   normalizeAllocationDraftPercents,
@@ -175,6 +177,49 @@ test('multi-fund same asset class is grouped while preserving holding count', ()
   nearly(equity.currentValue, 220);
   nearly(equity.principal, 190);
   nearly(equity.currentRatio, 220 / 700, 0.0001);
+});
+
+test('asset drift display centers target and labels allowed range status', () => {
+  const normal = createAssetDriftDisplay({
+    assetClassName: '股票',
+    currentRatio: 0.312,
+    targetRatio: 0.3,
+    threshold: 0.06,
+  });
+  nearly(normal.targetPosition, 50, 0.0001);
+  nearly(normal.currentPosition, 60, 0.0001);
+  nearly(normal.rangeStart, 0, 0.0001);
+  nearly(normal.rangeEnd, 100, 0.0001);
+  assert.equal(normal.status, 'normal');
+  assert.equal(normal.statusText, '正常');
+  assert.equal(normal.driftText, '超配 +1.20%');
+
+  const nearUpper = createAssetDriftDisplay({
+    currentRatio: 0.352,
+    targetRatio: 0.3,
+    threshold: 0.06,
+  });
+  assert.equal(nearUpper.status, 'near_upper');
+  assert.equal(nearUpper.statusText, '接近上限');
+
+  const over = createAssetDriftDisplay({
+    currentRatio: 0.38,
+    targetRatio: 0.3,
+    threshold: 0.06,
+  });
+  assert.equal(over.status, 'rebalance');
+  assert.equal(over.statusText, '建议再平衡');
+  assert.equal(over.tone, 'warning');
+  assert.equal(over.currentPosition, 100);
+
+  const under = createAssetDriftDisplay({
+    currentRatio: 0.21,
+    targetRatio: 0.3,
+    threshold: 0.06,
+  });
+  assert.equal(under.status, 'rebalance');
+  assert.equal(under.driftText, '低配 -9.00%');
+  assert.equal(under.currentPosition, 0);
 });
 
 test('rebalance identifies over-weight and under-weight permanent portfolio sleeves', () => {
@@ -593,6 +638,44 @@ test('portfolio holding form supports amount and share input modes', () => {
   nearly(shareMode.share, 100);
   nearly(calculatePortfolioSummary(portfolio, [shareMode]).totalValue, 12);
   nearly(calculatePortfolioSummary(portfolio, [shareMode]).dailyEstimatedProfit, 2);
+});
+
+test('adding portfolio fund holding can sync missing fund into main list', () => {
+  const holding = buildPortfolioHoldingFromDraft({
+    portfolioId: portfolio.id,
+    draft: {
+      instrumentType: 'fund',
+      assetClassId: 'bond',
+      fundCode: '006961',
+      fundName: 'Bond Fund',
+      valueMode: 'share',
+      costAmount: '100',
+      share: '80',
+    },
+    funds: [{ code: '006961', name: 'Bond Fund', gsz: 1.25, dwjz: 1.24, lastNav: 1.2 }],
+  });
+
+  const inserted = upsertPortfolioHoldingFund([], holding, [
+    { code: '006961', name: 'Bond Fund', gsz: 1.25, dwjz: 1.24, lastNav: 1.2 },
+  ]);
+
+  assert.equal(inserted.length, 1);
+  assert.equal(inserted[0].code, '006961');
+  assert.equal(inserted[0].name, 'Bond Fund');
+  nearly(inserted[0].gsz, 1.25);
+  nearly(inserted[0].dwjz, 1.24);
+
+  const duplicate = upsertPortfolioHoldingFund(inserted, holding, []);
+  assert.equal(duplicate, inserted);
+
+  const cashHolding = normalizePortfolioHolding({
+    portfolioId: portfolio.id,
+    instrumentType: 'cash',
+    assetClassId: 'cash',
+    fundName: 'Cash',
+    manualValue: 100,
+  });
+  assert.equal(upsertPortfolioHoldingFund(inserted, cashHolding, []), inserted);
 });
 
 test('portfolio editor can normalize existing allocation rows to 100 percent', () => {

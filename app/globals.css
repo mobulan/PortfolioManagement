@@ -4587,39 +4587,137 @@ input[type="number"] {
 }
 
 .portfolio-asset-row {
+  --asset-drift-color: var(--primary);
   display: grid;
-  grid-template-columns: minmax(96px, 1fr) minmax(180px, 2.2fr) minmax(72px, auto) minmax(92px, auto);
-  align-items: center;
-  gap: 10px;
+  grid-template-columns: minmax(100px, 0.9fr) minmax(260px, 2fr);
+  align-items: start;
+  gap: 4px 14px;
   min-width: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   color: var(--text);
 }
 
-.portfolio-asset-row span,
-.portfolio-asset-row strong,
-.portfolio-asset-row em {
-  min-width: 0;
-  overflow-wrap: anywhere;
+.portfolio-asset-row:last-child {
+  border-bottom: 0;
 }
 
-.portfolio-asset-row em {
-  color: var(--muted);
+.portfolio-asset-row.is-caution {
+  --asset-drift-color: #f59e0b;
+}
+
+.portfolio-asset-row.is-warning {
+  --asset-drift-color: #f97316;
+}
+
+.portfolio-asset-row.is-danger {
+  --asset-drift-color: #ef4444;
+}
+
+.portfolio-asset-head,
+.portfolio-asset-meta,
+.portfolio-asset-axis {
+  min-width: 0;
+}
+
+.portfolio-asset-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.portfolio-asset-head strong {
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.portfolio-asset-head em {
+  width: fit-content;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--asset-drift-color) 40%, transparent);
+  background: color-mix(in srgb, var(--asset-drift-color) 12%, transparent);
+  color: var(--asset-drift-color);
   font-style: normal;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.portfolio-asset-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   font-size: 12px;
 }
 
-.portfolio-asset-track {
-  height: 9px;
-  min-width: 0;
-  overflow: hidden;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--muted) 22%, transparent);
+.portfolio-asset-meta span {
+  color: var(--muted);
 }
 
-.portfolio-asset-track > div {
-  height: 100%;
+.portfolio-asset-meta strong {
+  color: var(--asset-drift-color);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.portfolio-asset-track {
+  position: relative;
+  grid-column: 2;
+  height: 16px;
+  min-width: 0;
+  margin-top: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  overflow: visible;
+}
+
+.portfolio-asset-range {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--primary), var(--accent));
+  background: color-mix(in srgb, var(--asset-drift-color) 24%, transparent);
+}
+
+.portfolio-asset-target {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--text);
+  transform: translateX(-50%);
+  opacity: 0.76;
+}
+
+.portfolio-asset-current {
+  position: absolute;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  border: 3px solid var(--portfolio-panel-bg);
+  border-radius: 999px;
+  background: var(--asset-drift-color);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--asset-drift-color) 72%, transparent);
+  transform: translate(-50%, -50%);
+}
+
+.portfolio-asset-axis {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.portfolio-asset-axis span:nth-child(2) {
+  text-align: center;
+}
+
+.portfolio-asset-axis span:last-child {
+  text-align: right;
 }
 
 .portfolio-table-wrap {
@@ -4658,6 +4756,11 @@ input[type="number"] {
   max-width: 220px;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.portfolio-table .portfolio-number-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .portfolio-holdings-table {
@@ -5280,7 +5383,7 @@ input[type="number"] {
   }
 
   .portfolio-asset-row {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr;
   }
 
   .portfolio-asset-track {
@@ -5288,7 +5391,11 @@ input[type="number"] {
     order: 3;
   }
 
-  .portfolio-asset-row em {
+  .portfolio-asset-meta {
+    grid-column: 1 / -1;
+  }
+
+  .portfolio-asset-axis {
     grid-column: 1 / -1;
     order: 4;
   }

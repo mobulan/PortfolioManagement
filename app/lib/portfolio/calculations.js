@@ -5,6 +5,14 @@ const toNumber = (value, fallback = 0) => {
   return Number.isFinite(num) ? num : fallback;
 };
 
+const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
+const clampPercent = (value) => Math.min(100, Math.max(0, round2(value)));
+const formatSignedPct = (value) => {
+  const pct = (Number(value) || 0) * 100;
+  const sign = pct > 0 ? '+' : '';
+  return `${sign}${pct.toFixed(2)}%`;
+};
+
 export function getHoldingUnitValue(holding) {
   if (!holding) return 0;
   if (holding.manualValue !== null && holding.manualValue !== undefined) return toNumber(holding.manualValue);
@@ -72,15 +80,69 @@ export function summarizeAssetClasses(portfolio, holdings = []) {
     }
   }
   return Array.from(byClass.values()).map((row) => {
-    const targetRatio = (portfolio?.targetAllocations || []).find((a) => a.assetClassId === row.assetClassId)?.targetRatio ?? 0;
+    const allocation = (portfolio?.targetAllocations || []).find((a) => a.assetClassId === row.assetClassId);
+    const targetRatio = allocation?.targetRatio ?? 0;
+    const threshold = allocation?.rebalanceThreshold ?? portfolio?.rebalanceConfig?.defaultThreshold ?? 0.05;
     const currentRatio = totalValue === 0 ? 0 : row.currentValue / totalValue;
     return {
       ...row,
       targetRatio,
+      threshold,
       currentRatio,
       drift: currentRatio - targetRatio,
     };
   });
+}
+
+export function createAssetDriftDisplay(row = {}) {
+  const currentRatio = toNumber(row.currentRatio);
+  const targetRatio = toNumber(row.targetRatio);
+  const threshold = Math.max(0, toNumber(row.threshold ?? row.rebalanceThreshold, 0.05));
+  const drift = currentRatio - targetRatio;
+  const lowerRatio = Math.max(0, targetRatio - threshold);
+  const upperRatio = Math.min(1, targetRatio + threshold);
+  const axisMin = targetRatio - threshold;
+  const axisMax = targetRatio + threshold;
+  const axisSpan = Math.max(axisMax - axisMin, 0.000001);
+  const targetPosition = clampPercent(((targetRatio - axisMin) / axisSpan) * 100);
+  const currentPosition = clampPercent(((currentRatio - axisMin) / axisSpan) * 100);
+  const rangeStart = clampPercent(((lowerRatio - axisMin) / axisSpan) * 100);
+  const rangeEnd = clampPercent(((upperRatio - axisMin) / axisSpan) * 100);
+  const absDrift = Math.abs(drift);
+  const nearBoundaryStart = threshold * 0.8;
+  const severeStart = threshold * 1.5;
+  let status = 'normal';
+  let statusText = '正常';
+  let tone = 'normal';
+
+  if (threshold > 0 && absDrift > threshold) {
+    status = 'rebalance';
+    statusText = '建议再平衡';
+    tone = absDrift >= severeStart ? 'danger' : 'warning';
+  } else if (threshold > 0 && absDrift >= nearBoundaryStart) {
+    status = drift < 0 ? 'near_lower' : 'near_upper';
+    statusText = drift < 0 ? '接近下限' : '接近上限';
+    tone = 'caution';
+  }
+
+  return {
+    assetClassId: row.assetClassId || '',
+    assetClassName: row.assetClassName || getAssetClassName(row.assetClassId),
+    currentRatio,
+    targetRatio,
+    threshold,
+    lowerRatio,
+    upperRatio,
+    drift,
+    driftText: drift < 0 ? `低配 ${formatSignedPct(drift)}` : drift > 0 ? `超配 ${formatSignedPct(drift)}` : '无偏离',
+    status,
+    statusText,
+    tone,
+    targetPosition,
+    currentPosition,
+    rangeStart,
+    rangeEnd,
+  };
 }
 
 export function calculatePortfolioSummary(portfolio, holdings = []) {

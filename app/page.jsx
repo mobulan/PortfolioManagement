@@ -318,6 +318,7 @@ export default function HomePage() {
   const user = useUserStore((s) => s.user);
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const deviceIdRef = useRef('');
+  const refreshAllRef = useRef(null);
 
   useEffect(() => {
     // 优先使用服务端返回的时间，如果没有则使用本地存储的时间
@@ -4128,6 +4129,7 @@ export default function HomePage() {
       }
     }
   };
+  refreshAllRef.current = refreshAll;
 
   const toggleViewMode = () => {
     const nextMode = viewMode === 'card' ? 'list' : 'card';
@@ -6514,9 +6516,9 @@ export default function HomePage() {
       return next;
     });
     // Immediately fetch new data for this fund so the UI updates
-    refreshAll([fundCode]);
+    refreshAllRef.current?.([fundCode]);
     showToast('切换数据源成功', 'success');
-  }, [setFunds]); // refreshAll is omitted from deps to avoid loop, it's stable enough in page scope
+  }, [setFunds]);
 
   const openActionModal = useCallback((fund) => {
     const code = fund?.code;
@@ -7104,6 +7106,7 @@ export default function HomePage() {
           {currentTab === 'portfolio' ? (
             <PortfolioWorkspace
               funds={funds}
+              setFunds={setFunds}
               legacyHoldings={holdings}
               groupHoldings={groupHoldings}
               portfolios={portfolios}
@@ -7560,6 +7563,7 @@ export default function HomePage() {
         <div className="mobile-main-tab-panel mobile-main-tab-panel--portfolio">
           <PortfolioWorkspace
             funds={funds}
+            setFunds={setFunds}
             legacyHoldings={holdings}
             groupHoldings={groupHoldings}
             portfolios={portfolios}

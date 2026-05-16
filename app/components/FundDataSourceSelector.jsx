@@ -18,6 +18,10 @@ function formatGszzlEstimate(gszzl) {
 }
 
 export default function FundDataSourceSelector({ fund, onClose, onSelect }) {
+  const fundCode = fund?.code || '';
+  const fundDataSource = fund?.dataSource;
+  const fundJzrq = fund?.jzrq;
+  const fundZzl = fund?.zzl;
   const [sourceId, setSourceId] = useState('1');
   const [loading, setLoading] = useState(true);
   const [estimates, setEstimates] = useState({
@@ -28,11 +32,11 @@ export default function FundDataSourceSelector({ fund, onClose, onSelect }) {
   const [bestSource, setBestSource] = useState(null);
 
   useEffect(() => {
-    if (fund?.dataSource) {
-      setSourceId(String(fund.dataSource));
+    if (fundDataSource) {
+      setSourceId(String(fundDataSource));
     }
 
-    if (!fund?.code) {
+    if (!fundCode) {
       setEstimates({ 1: '--', 2: '--', 3: '--' });
       setLoading(false);
       setBestSource(null);
@@ -44,14 +48,14 @@ export default function FundDataSourceSelector({ fund, onClose, onSelect }) {
     setBestSource(null);
 
     const today = new Date().toISOString().slice(0, 10);
-    const actualZzl = fund.jzrq === today && typeof fund.zzl === 'number' && Number.isFinite(fund.zzl)
-      ? fund.zzl
+    const actualZzl = fundJzrq === today && typeof fundZzl === 'number' && Number.isFinite(fundZzl)
+      ? fundZzl
       : null;
 
     Promise.all([
-      fetchFundValuationBySource(fund.code, 1).catch(() => null),
-      fetchFundValuationBySource(fund.code, 2).catch(() => null),
-      fetchFundValuationBySource(fund.code, 3).catch(() => null),
+      fetchFundValuationBySource(fundCode, 1).catch(() => null),
+      fetchFundValuationBySource(fundCode, 2).catch(() => null),
+      fetchFundValuationBySource(fundCode, 3).catch(() => null),
     ]).then(([v1, v2, v3]) => {
       if (!isMounted) return;
       const e1 = formatGszzlEstimate(v1?.gszzl);
@@ -79,7 +83,7 @@ export default function FundDataSourceSelector({ fund, onClose, onSelect }) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [fundCode, fundDataSource, fundJzrq, fundZzl]);
 
   const handleConfirm = () => {
     onSelect(parseInt(sourceId, 10));

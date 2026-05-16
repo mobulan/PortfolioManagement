@@ -7,6 +7,77 @@ import ThemeColorSync from './components/ThemeColorSync';
 import { QueryClientProviderWrapper } from './providers/query-client-provider';
 import packageJson from '../package.json';
 
+const darkReaderHydrationGuardScript = `
+(function(){
+  var DARK_READER_ATTR_PREFIX = 'data-darkreader-';
+  var DARK_READER_STYLE_PREFIX = '--darkreader-';
+  var stopTimer = null;
+
+  function cleanElement(el) {
+    if (!el || el.nodeType !== 1) return;
+
+    for (var i = el.attributes.length - 1; i >= 0; i -= 1) {
+      var attrName = el.attributes[i].name;
+      if (attrName.indexOf(DARK_READER_ATTR_PREFIX) === 0) {
+        el.removeAttribute(attrName);
+      }
+    }
+
+    if (el.style && el.style.length) {
+      for (var j = el.style.length - 1; j >= 0; j -= 1) {
+        var propName = el.style[j];
+        if (propName.indexOf(DARK_READER_STYLE_PREFIX) === 0) {
+          el.style.removeProperty(propName);
+        }
+      }
+    }
+  }
+
+  function cleanTree(root) {
+    cleanElement(root);
+    if (!root || !root.querySelectorAll) return;
+    var nodes = root.querySelectorAll('[data-darkreader-inline-bg],[data-darkreader-inline-bgcolor],[data-darkreader-inline-bgimage],[data-darkreader-inline-border],[data-darkreader-inline-color],[data-darkreader-inline-fill],[data-darkreader-inline-stroke],[style*="--darkreader-"]');
+    for (var i = 0; i < nodes.length; i += 1) cleanElement(nodes[i]);
+  }
+
+  try {
+    cleanTree(document.documentElement);
+
+    var observer = new MutationObserver(function(mutations){
+      for (var i = 0; i < mutations.length; i += 1) {
+        var mutation = mutations[i];
+        if (mutation.type === 'attributes') {
+          cleanElement(mutation.target);
+          continue;
+        }
+        for (var j = 0; j < mutation.addedNodes.length; j += 1) {
+          cleanTree(mutation.addedNodes[j]);
+        }
+      }
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      childList: true,
+      subtree: true
+    });
+
+    stopTimer = window.setTimeout(function(){
+      observer.disconnect();
+      cleanTree(document.documentElement);
+    }, 3000);
+
+    window.addEventListener('load', function(){
+      window.setTimeout(function(){
+        if (stopTimer) window.clearTimeout(stopTimer);
+        observer.disconnect();
+        cleanTree(document.documentElement);
+      }, 0);
+    }, { once: true });
+  } catch (e) {}
+})();
+`;
+
 export const metadata = {
   title: `基估宝 V${packageJson.version}`,
   description: '输入基金编号添加基金，实时显示估值与前10重仓'
@@ -31,6 +102,11 @@ export default function RootLayout({ children }) {
       <script
         dangerouslySetInnerHTML={{
           __html: `(function(){try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();`,
+        }}
+      />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: darkReaderHydrationGuardScript,
         }}
       />
     </head>

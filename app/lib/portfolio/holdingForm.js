@@ -64,6 +64,40 @@ export function findPortfolioFundCandidate(funds = [], query = '') {
     || null;
 }
 
+export function upsertPortfolioHoldingFund(funds = [], holding = {}, candidates = []) {
+  if (holding?.instrumentType !== 'fund') return funds;
+  const code = clean(holding.fundCode);
+  if (!code) return funds;
+
+  const current = Array.isArray(funds) ? funds : [];
+  if (current.some((fund) => clean(fund?.code ?? fund?.CODE ?? fund?.fundCode) === code)) {
+    return funds;
+  }
+
+  const candidateList = Array.isArray(candidates) ? candidates : [];
+  const rawCandidate = candidateList.find((item) => (
+    clean(item?.code ?? item?.CODE ?? item?.fundCode) === code
+  ));
+  const candidate = normalizePortfolioFundCandidate(rawCandidate)
+    || normalizePortfolioFundCandidate(holding)
+    || { code, name: clean(holding.fundName) || code };
+
+  const nextFund = {
+    ...(rawCandidate || {}),
+    code,
+    name: candidate.name || clean(holding.fundName) || code,
+  };
+
+  const estimatedNav = candidate.estimatedNav ?? holding.estimatedNav;
+  const currentNav = candidate.currentNav ?? holding.currentNav;
+  const previousNav = candidate.previousNav ?? holding.previousNav;
+  if (estimatedNav !== null && estimatedNav !== undefined) nextFund.gsz = estimatedNav;
+  if (currentNav !== null && currentNav !== undefined) nextFund.dwjz = currentNav;
+  if (previousNav !== null && previousNav !== undefined) nextFund.lastNav = previousNav;
+
+  return [...current, nextFund];
+}
+
 export function buildPortfolioHoldingFromDraft({ portfolioId = '', draft = {}, funds = [] } = {}) {
   const instrumentType = draft.instrumentType || 'fund';
   const fundCode = instrumentType === 'cash' ? '' : clean(draft.fundCode);
