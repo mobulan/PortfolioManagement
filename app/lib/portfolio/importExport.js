@@ -4,18 +4,18 @@ import {
   normalizePortfolio,
   normalizePortfolioHolding,
   normalizePortfolioTransaction,
-  normalizePrincipalRecord,
+  normalizePrincipalRecord
 } from './schema.js';
 import { parsePortfolioNumber } from './holdingForm.js';
 
-const asArray = (value) => Array.isArray(value) ? value : [];
+const asArray = (value) => (Array.isArray(value) ? value : []);
 const importTypes = [
   'portfolios',
   'portfolioHoldings',
   'portfolioTransactions',
   'portfolioPrincipalRecords',
   'portfolioSnapshots',
-  'portfolioBacktests',
+  'portfolioBacktests'
 ];
 
 export const CSV_IMPORT_TYPES = ['portfolioHoldings', 'portfolioTransactions', 'portfolioSnapshots'];
@@ -24,36 +24,104 @@ export const PORTFOLIO_IMPORT_CONFLICT_MODES = {
   skip: {
     id: 'skip',
     name: '跳过已有记录',
-    description: '导入 ID 已存在时保留当前记录。',
+    description: '导入 ID 已存在时保留当前记录。'
   },
   overwrite: {
     id: 'overwrite',
     name: '覆盖已有记录',
-    description: '导入 ID 已存在时用导入记录替换当前记录。',
+    description: '导入 ID 已存在时用导入记录替换当前记录。'
   },
   merge: {
     id: 'merge',
     name: '合并字段',
-    description: '保留当前记录，并填充导入记录中的非空字段。',
-  },
+    description: '保留当前记录，并填充导入记录中的非空字段。'
+  }
 };
+
+export function buildPortfolioImportConflictPreview({
+  type,
+  importedRows = [],
+  currentRows = [],
+  conflictMode = 'skip'
+} = {}) {
+  const getKey = (row) =>
+    type === 'portfolioSnapshots' ? `${row?.portfolioId || ''}:${row?.date || ''}` : row?.id || '';
+  const existingKeys = new Set((Array.isArray(currentRows) ? currentRows : []).map(getKey).filter(Boolean));
+  const previewRows = (Array.isArray(importedRows) ? importedRows : []).map((row) => {
+    const exists = existingKeys.has(getKey(row));
+    return {
+      ...row,
+      _importAction: exists
+        ? conflictMode === 'overwrite'
+          ? '覆盖'
+          : conflictMode === 'merge'
+            ? '合并'
+            : '跳过'
+        : '新增'
+    };
+  });
+  return {
+    previewRows,
+    actionCounts: previewRows.reduce((counts, row) => {
+      counts[row._importAction] = (counts[row._importAction] || 0) + 1;
+      return counts;
+    }, {})
+  };
+}
 
 const csvHeaders = {
   portfolioHoldings: [
-    'id', 'portfolioId', 'assetClassId', 'instrumentType', 'fundCode', 'fundName',
-    'share', 'costPrice', 'costAmount', 'currentNav', 'estimatedNav', 'previousNav',
-    'currentValue', 'manualValue', 'enabled', 'archived', 'createdAt', 'updatedAt',
+    'id',
+    'portfolioId',
+    'assetClassId',
+    'instrumentType',
+    'fundCode',
+    'fundName',
+    'share',
+    'costPrice',
+    'costAmount',
+    'currentNav',
+    'estimatedNav',
+    'previousNav',
+    'currentValue',
+    'manualValue',
+    'enabled',
+    'archived',
+    'createdAt',
+    'updatedAt'
   ],
   portfolioTransactions: [
-    'id', 'portfolioId', 'holdingId', 'fundCode', 'assetClassId', 'type', 'date',
-    'amount', 'share', 'price', 'fee', 'isAfter3pm', 'relatedTransactionId',
-    'principalImpact', 'note', 'createdAt', 'updatedAt',
+    'id',
+    'portfolioId',
+    'holdingId',
+    'fundCode',
+    'assetClassId',
+    'type',
+    'date',
+    'amount',
+    'share',
+    'price',
+    'fee',
+    'isAfter3pm',
+    'relatedTransactionId',
+    'principalImpact',
+    'note',
+    'createdAt',
+    'updatedAt'
   ],
   portfolioSnapshots: [
-    'id', 'portfolioId', 'date', 'totalValue', 'totalPrincipal', 'totalProfit',
-    'totalReturnRate', 'dailyEstimatedProfit', 'holdingCount', 'assetClassValues',
-    'createdAt',
-  ],
+    'id',
+    'portfolioId',
+    'date',
+    'totalValue',
+    'totalPrincipal',
+    'totalProfit',
+    'totalReturnRate',
+    'dailyEstimatedProfit',
+    'holdingCount',
+    'assetClassValues',
+    'createdAt'
+  ]
 };
 
 const emptyCounts = () => Object.fromEntries(importTypes.map((type) => [type, { valid: 0, dropped: 0 }]));
@@ -131,9 +199,12 @@ const isValidIsoDate = (value) => {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === text;
 };
 
-const buildKnownFundCodes = (knownFunds = []) => new Set(asArray(knownFunds)
-  .map((fund) => String(fund?.code ?? fund?.fundCode ?? '').trim())
-  .filter(Boolean));
+const buildKnownFundCodes = (knownFunds = []) =>
+  new Set(
+    asArray(knownFunds)
+      .map((fund) => String(fund?.code ?? fund?.fundCode ?? '').trim())
+      .filter(Boolean)
+  );
 
 const assertKnownFundCode = (row, knownFundCodes, errors) => {
   if (!knownFundCodes.size || !hasText(row.fundCode)) return;
@@ -146,8 +217,16 @@ const normalizeCsvHolding = (row, context) => {
   const errors = [];
   assertKnownFundCode(row, context.knownFundCodes, errors);
   const numeric = Object.fromEntries(
-    ['share', 'costPrice', 'costAmount', 'currentNav', 'estimatedNav', 'previousNav', 'currentValue', 'manualValue']
-      .map((field) => [field, toCsvNumber(row[field], field, errors)]),
+    [
+      'share',
+      'costPrice',
+      'costAmount',
+      'currentNav',
+      'estimatedNav',
+      'previousNav',
+      'currentValue',
+      'manualValue'
+    ].map((field) => [field, toCsvNumber(row[field], field, errors)])
   );
   if (context.validPortfolioIds.size && !context.validPortfolioIds.has(row.portfolioId)) {
     errors.push(`portfolioId ${row.portfolioId || '(empty)'} was not found`);
@@ -161,7 +240,10 @@ const normalizeCsvTransaction = (row, context) => {
   assertKnownFundCode(row, context.knownFundCodes, errors);
   if (!isValidIsoDate(row.date)) errors.push(`date invalid: ${row.date || '(empty)'}`);
   const numeric = Object.fromEntries(
-    ['amount', 'share', 'price', 'fee', 'principalImpact'].map((field) => [field, toCsvNumber(row[field], field, errors)]),
+    ['amount', 'share', 'price', 'fee', 'principalImpact'].map((field) => [
+      field,
+      toCsvNumber(row[field], field, errors)
+    ])
   );
   if (!hasText(row.amount)) errors.push('amount invalid: (empty)');
   if (context.validPortfolioIds.size && !context.validPortfolioIds.has(row.portfolioId)) {
@@ -177,8 +259,9 @@ const normalizeCsvTransaction = (row, context) => {
 const normalizeCsvSnapshot = (row, context) => {
   const errors = [];
   if (!isValidIsoDate(row.date)) errors.push(`date invalid: ${row.date || '(empty)'}`);
-  ['totalValue', 'totalPrincipal', 'totalProfit', 'totalReturnRate', 'dailyEstimatedProfit', 'holdingCount']
-    .forEach((field) => toCsvNumber(row[field], field, errors));
+  ['totalValue', 'totalPrincipal', 'totalProfit', 'totalReturnRate', 'dailyEstimatedProfit', 'holdingCount'].forEach(
+    (field) => toCsvNumber(row[field], field, errors)
+  );
   if (context.validPortfolioIds.size && !context.validPortfolioIds.has(row.portfolioId)) {
     errors.push(`portfolioId ${row.portfolioId || '(empty)'} was not found`);
   }
@@ -191,16 +274,16 @@ const normalizeCsvSnapshot = (row, context) => {
       totalProfit: toCsvNumber(row.totalProfit, 'totalProfit', []),
       totalReturnRate: toCsvNumber(row.totalReturnRate, 'totalReturnRate', []),
       dailyEstimatedProfit: toCsvNumber(row.dailyEstimatedProfit, 'dailyEstimatedProfit', []),
-      holdingCount: toCsvNumber(row.holdingCount, 'holdingCount', []),
+      holdingCount: toCsvNumber(row.holdingCount, 'holdingCount', [])
     },
-    errors,
+    errors
   };
 };
 
 const csvNormalizers = {
   portfolioHoldings: normalizeCsvHolding,
   portfolioTransactions: normalizeCsvTransaction,
-  portfolioSnapshots: normalizeCsvSnapshot,
+  portfolioSnapshots: normalizeCsvSnapshot
 };
 
 export function analyzePortfolioCsvImport({
@@ -208,7 +291,7 @@ export function analyzePortfolioCsvImport({
   type = 'portfolioTransactions',
   knownFunds = [],
   validPortfolioIds = [],
-  validHoldingIds = [],
+  validHoldingIds = []
 } = {}) {
   const parseResult = parsePortfolioCsv(csv);
   const errors = [...parseResult.errors];
@@ -225,14 +308,14 @@ export function analyzePortfolioCsvImport({
       rows,
       droppedRows: parseResult.records,
       headers: parseResult.headers,
-      errors,
+      errors
     };
   }
 
   const context = {
     knownFundCodes: buildKnownFundCodes(knownFunds),
     validPortfolioIds: new Set(validPortfolioIds),
-    validHoldingIds: new Set(validHoldingIds),
+    validHoldingIds: new Set(validHoldingIds)
   };
 
   parseResult.records.forEach((record, index) => {
@@ -250,12 +333,12 @@ export function analyzePortfolioCsvImport({
     type,
     counts: {
       valid: rows.length,
-      dropped: droppedRows.length,
+      dropped: droppedRows.length
     },
     rows,
     droppedRows,
     headers: parseResult.headers,
-    errors,
+    errors
   };
 }
 
@@ -275,31 +358,41 @@ export function exportPortfolioCsv({ type = 'portfolioHoldings', rows = [] } = {
 
 export function normalizePortfolioPayload(input = {}) {
   const errors = [];
-  const portfolios = asArray(input.portfolios).map((row) => {
-    try {
-      return normalizePortfolio(row);
-    } catch (error) {
-      errors.push(`portfolio invalid: ${error.message}`);
-      return null;
-    }
-  }).filter(Boolean);
+  const portfolios = asArray(input.portfolios)
+    .map((row) => {
+      try {
+        return normalizePortfolio(row);
+      } catch (error) {
+        errors.push(`portfolio invalid: ${error.message}`);
+        return null;
+      }
+    })
+    .filter(Boolean);
   const portfolioIds = new Set(portfolios.map((row) => row.id));
 
-  const portfolioHoldings = asArray(input.portfolioHoldings).map((row) => normalizePortfolioHolding(row))
+  const portfolioHoldings = asArray(input.portfolioHoldings)
+    .map((row) => normalizePortfolioHolding(row))
     .filter((row) => row.portfolioId && portfolioIds.has(row.portfolioId));
   const holdingIds = new Set(portfolioHoldings.map((row) => row.id));
 
-  const portfolioTransactions = asArray(input.portfolioTransactions).map((row) => normalizePortfolioTransaction(row))
-    .filter((row) => row.portfolioId && portfolioIds.has(row.portfolioId) && (!row.holdingId || holdingIds.has(row.holdingId)));
+  const portfolioTransactions = asArray(input.portfolioTransactions)
+    .map((row) => normalizePortfolioTransaction(row))
+    .filter(
+      (row) => row.portfolioId && portfolioIds.has(row.portfolioId) && (!row.holdingId || holdingIds.has(row.holdingId))
+    );
   const txIds = new Set(portfolioTransactions.map((row) => row.id));
 
-  const portfolioPrincipalRecords = asArray(input.portfolioPrincipalRecords).map((row) => normalizePrincipalRecord(row))
-    .filter((row) => row.portfolioId && portfolioIds.has(row.portfolioId) && (!row.transactionId || txIds.has(row.transactionId)));
+  const portfolioPrincipalRecords = asArray(input.portfolioPrincipalRecords)
+    .map((row) => normalizePrincipalRecord(row))
+    .filter(
+      (row) =>
+        row.portfolioId && portfolioIds.has(row.portfolioId) && (!row.transactionId || txIds.has(row.transactionId))
+    );
 
-  const portfolioSnapshots = asArray(input.portfolioSnapshots)
-    .filter((row) => row && typeof row === 'object' && portfolioIds.has(row.portfolioId));
-  const portfolioBacktests = asArray(input.portfolioBacktests)
-    .filter((row) => row && typeof row === 'object');
+  const portfolioSnapshots = asArray(input.portfolioSnapshots).filter(
+    (row) => row && typeof row === 'object' && portfolioIds.has(row.portfolioId)
+  );
+  const portfolioBacktests = asArray(input.portfolioBacktests).filter((row) => row && typeof row === 'object');
 
   return {
     portfolioSchemaVersion: PORTFOLIO_SCHEMA_VERSION,
@@ -311,9 +404,9 @@ export function normalizePortfolioPayload(input = {}) {
     portfolioBacktests,
     portfolioSettings: {
       ...DEFAULT_PORTFOLIO_SETTINGS,
-      ...(input.portfolioSettings && typeof input.portfolioSettings === 'object' ? input.portfolioSettings : {}),
+      ...(input.portfolioSettings && typeof input.portfolioSettings === 'object' ? input.portfolioSettings : {})
     },
-    errors,
+    errors
   };
 }
 
@@ -329,8 +422,8 @@ export function analyzePortfolioImport(input = {}) {
     portfolioBacktests: [],
     portfolioSettings: {
       ...DEFAULT_PORTFOLIO_SETTINGS,
-      ...(payload.portfolioSettings && typeof payload.portfolioSettings === 'object' ? payload.portfolioSettings : {}),
-    },
+      ...(payload.portfolioSettings && typeof payload.portfolioSettings === 'object' ? payload.portfolioSettings : {})
+    }
   };
 
   const recordDrop = (type, message) => {
@@ -440,15 +533,19 @@ export function analyzePortfolioImport(input = {}) {
     valid: errors.length === 0,
     counts,
     errors,
-    normalized,
+    normalized
   };
 }
 
 export function exportPortfolioData(input = {}) {
-  return JSON.stringify({
-    ...normalizePortfolioPayload(input),
-    exportedAt: new Date().toISOString(),
-  }, null, 2);
+  return JSON.stringify(
+    {
+      ...normalizePortfolioPayload(input),
+      exportedAt: new Date().toISOString()
+    },
+    null,
+    2
+  );
 }
 
 export function importPortfolioData(input = {}) {

@@ -8,10 +8,12 @@ import {
   getPortfolioHoldingDraftErrors,
   createDefaultPortfolio,
   normalizePortfolioFundCandidate,
+  calculateHoldingMetrics,
   calculatePortfolioSummary,
   createAssetDriftDisplay,
   aggregateDashboard,
   buildDashboardRiskMetrics,
+  buildPortfolioInsights,
   calculateRebalancePlan,
   calculateSmartCashPlan,
   createRebalanceTransactionDrafts,
@@ -19,47 +21,57 @@ import {
   createPortfolioTransactionBaseline,
   upsertPortfolioHoldingFund,
   createPortfolioSnapshot,
+  createSnapshotVersionEntry,
+  restoreSnapshotVersion,
   prepareAutomaticDailySnapshot,
   exportPortfolioData,
   exportPortfolioCsv,
   analyzePortfolioImport,
   analyzePortfolioCsvImport,
+  buildPortfolioImportConflictPreview,
   CSV_IMPORT_TYPES,
   PORTFOLIO_IMPORT_CONFLICT_MODES,
   previewLegacyHoldingsMigration,
   previewGroupHoldingsMigration,
+  getPortfolioTransactionDeleteImpact,
   rebuildPortfolioAfterTransactionDelete,
+  rebuildPortfolioAfterTransactionReplace
 } from '@/app/lib/portfolio';
 import { fetchFundData, searchFunds } from '@/app/api/fund';
 import PortfolioBacktestPanel from './PortfolioBacktestPanel';
 import PortfolioCsvImportPanel from './PortfolioCsvImportPanel';
 import PortfolioDetailTabs from './PortfolioDetailTabs';
 import PortfolioEditorPanel from './PortfolioEditorPanel';
+import PortfolioExcelImportPanel from './PortfolioExcelImportPanel';
 import PortfolioHistoryImportPanel from './PortfolioHistoryImportPanel';
 import PortfolioMigrationPanel from './PortfolioMigrationPanel';
 import PortfolioSmartTradePanel from './PortfolioSmartTradePanel';
 import PortfolioTransactionsPanel from './PortfolioTransactionsPanel';
 
-const money = (value) => Number(value || 0).toLocaleString('zh-CN', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+const money = (value) =>
+  Number(value || 0).toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 const pct = (value) => `${((Number(value) || 0) * 100).toFixed(2)}%`;
 const today = () => new Date().toISOString().slice(0, 10);
 const customPortfolioNumber = (name = '') => {
-  const match = String(name).trim().match(/^自定义组合\s*(\d+)?$/);
+  const match = String(name)
+    .trim()
+    .match(/^自定义组合\s*(\d+)?$/);
   if (!match) return null;
   return Number(match[1] || 1);
 };
 
 const isPresent = (value) => value != null && value !== '';
 
-const mergeImportedRecord = (current, imported) => Object.fromEntries(
-  Object.entries({ ...current, ...imported }).map(([key]) => [
-    key,
-    isPresent(imported?.[key]) ? imported[key] : current?.[key],
-  ]),
-);
+const mergeImportedRecord = (current, imported) =>
+  Object.fromEntries(
+    Object.entries({ ...current, ...imported }).map(([key]) => [
+      key,
+      isPresent(imported?.[key]) ? imported[key] : current?.[key]
+    ])
+  );
 
 const applyImportedRows = (currentRows = [], importedRows = [], conflictMode = 'skip') => {
   const result = [...(Array.isArray(currentRows) ? currentRows : [])];
@@ -98,7 +110,7 @@ export default function PortfolioWorkspace({
   portfolioSettings = {},
   setPortfolioSettings,
   portfolioSchemaVersion = 1,
-  setPortfolioSchemaVersion,
+  setPortfolioSchemaVersion
 }) {
   const [selectedPortfolioId, setSelectedPortfolioId] = useState(portfolios[0]?.id || '');
   const [holdingDraft, setHoldingDraft] = useState({
@@ -110,19 +122,25 @@ export default function PortfolioWorkspace({
     costAmount: '',
     estimatedNav: '',
     manualValue: '',
-    valueMode: 'amount',
+    valueMode: 'amount'
   });
   const [holdingFundMatches, setHoldingFundMatches] = useState([]);
   const [isHoldingFundSearching, setIsHoldingFundSearching] = useState(false);
   const [transactionDraft, setTransactionDraft] = useState({
     type: 'buy',
     holdingId: '',
+    targetHoldingId: '',
     amount: '',
     share: '',
+    targetShare: '',
     price: '',
+    targetPrice: '',
     fee: '',
-    date: today(),
+    note: '',
+    status: 'confirmed',
+    date: today()
   });
+  const [editingTransactionId, setEditingTransactionId] = useState('');
   const [cashflowAmount, setCashflowAmount] = useState('');
   const [importText, setImportText] = useState('');
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
@@ -132,13 +150,10 @@ export default function PortfolioWorkspace({
   const [csvAnalysis, setCsvAnalysis] = useState(null);
   const [holdingDraftErrors, setHoldingDraftErrors] = useState([]);
 
-  const activePortfolios = useMemo(
-    () => portfolios.filter((portfolio) => !portfolio.archived),
-    [portfolios],
-  );
+  const activePortfolios = useMemo(() => portfolios.filter((portfolio) => !portfolio.archived), [portfolios]);
   const selectedPortfolio = useMemo(
     () => activePortfolios.find((row) => row.id === selectedPortfolioId) || activePortfolios[0] || null,
-    [activePortfolios, selectedPortfolioId],
+    [activePortfolios, selectedPortfolioId]
   );
 
   useEffect(() => {
@@ -151,58 +166,91 @@ export default function PortfolioWorkspace({
     }
   }, [activePortfolios, selectedPortfolioId]);
 
-  const dashboard = useMemo(() => aggregateDashboard(portfolios, portfolioHoldings), [portfolios, portfolioHoldings]);
+  const includeArchivedPortfolios = Boolean(portfolioSettings?.includeArchivedPortfolios);
+  const dashboard = useMemo(
+    () => aggregateDashboard(portfolios, portfolioHoldings, { includeArchived: includeArchivedPortfolios }),
+    [includeArchivedPortfolios, portfolioHoldings, portfolios]
+  );
   const selectedSummary = useMemo(
-    () => selectedPortfolio ? calculatePortfolioSummary(selectedPortfolio, portfolioHoldings) : null,
-    [selectedPortfolio, portfolioHoldings],
+    () => (selectedPortfolio ? calculatePortfolioSummary(selectedPortfolio, portfolioHoldings) : null),
+    [selectedPortfolio, portfolioHoldings]
   );
   const rebalancePlan = useMemo(
-    () => selectedPortfolio ? calculateRebalancePlan(selectedPortfolio, portfolioHoldings) : null,
-    [selectedPortfolio, portfolioHoldings],
+    () => (selectedPortfolio ? calculateRebalancePlan(selectedPortfolio, portfolioHoldings) : null),
+    [selectedPortfolio, portfolioHoldings]
   );
   const smartCashPlan = useMemo(
-    () => selectedPortfolio ? calculateSmartCashPlan(selectedPortfolio, portfolioHoldings, Number(cashflowAmount || 0)) : null,
-    [selectedPortfolio, portfolioHoldings, cashflowAmount],
+    () =>
+      selectedPortfolio
+        ? calculateSmartCashPlan(selectedPortfolio, portfolioHoldings, Number(cashflowAmount || 0))
+        : null,
+    [selectedPortfolio, portfolioHoldings, cashflowAmount]
   );
   const rebalanceTransactionDrafts = useMemo(
-    () => selectedPortfolio ? createRebalanceTransactionDrafts({
-      portfolio: selectedPortfolio,
-      holdings: portfolioHoldings,
-      plan: rebalancePlan,
-      date: today(),
-    }) : [],
-    [portfolioHoldings, rebalancePlan, selectedPortfolio],
+    () =>
+      selectedPortfolio
+        ? createRebalanceTransactionDrafts({
+            portfolio: selectedPortfolio,
+            holdings: portfolioHoldings,
+            plan: rebalancePlan,
+            date: today()
+          })
+        : [],
+    [portfolioHoldings, rebalancePlan, selectedPortfolio]
   );
   const selectedHoldings = useMemo(
     () => portfolioHoldings.filter((holding) => holding.portfolioId === selectedPortfolio?.id && !holding.archived),
-    [portfolioHoldings, selectedPortfolio?.id],
+    [portfolioHoldings, selectedPortfolio?.id]
   );
   const selectedSnapshots = useMemo(
     () => portfolioSnapshots.filter((snapshot) => snapshot.portfolioId === selectedPortfolio?.id),
-    [portfolioSnapshots, selectedPortfolio?.id],
+    [portfolioSnapshots, selectedPortfolio?.id]
   );
   const selectedRiskMetrics = useMemo(
-    () => selectedPortfolio ? buildDashboardRiskMetrics({
-      portfolio: selectedPortfolio,
-      snapshots: selectedSnapshots,
-      holdings: selectedHoldings,
-      summary: selectedSummary,
-    }) : null,
-    [selectedHoldings, selectedPortfolio, selectedSnapshots, selectedSummary],
+    () =>
+      selectedPortfolio
+        ? buildDashboardRiskMetrics({
+            portfolio: selectedPortfolio,
+            snapshots: selectedSnapshots,
+            holdings: selectedHoldings,
+            summary: selectedSummary
+          })
+        : null,
+    [selectedHoldings, selectedPortfolio, selectedSnapshots, selectedSummary]
+  );
+  const selectedInsights = useMemo(
+    () =>
+      selectedPortfolio
+        ? buildPortfolioInsights({
+            portfolio: selectedPortfolio,
+            holdings: selectedHoldings,
+            snapshots: selectedSnapshots,
+            transactions: portfolioTransactions,
+            summary: selectedSummary
+          })
+        : null,
+    [portfolioTransactions, selectedHoldings, selectedPortfolio, selectedSnapshots, selectedSummary]
   );
   const transactionBaselines = portfolioSettings?.transactionBaselines || {};
   const selectedTransactionBaseline = selectedPortfolio?.id ? transactionBaselines[selectedPortfolio.id] : null;
   const selectedSnapshotSettings = selectedPortfolio?.id
     ? portfolioSettings?.portfolioSnapshotSettings?.[selectedPortfolio.id] || {}
     : {};
+  const selectedSnapshotVersions = useMemo(
+    () =>
+      (portfolioSettings?.snapshotVersions || [])
+        .filter((version) => version.portfolioId === selectedPortfolio?.id)
+        .sort((a, b) => String(b.replacedAt).localeCompare(String(a.replacedAt))),
+    [portfolioSettings?.snapshotVersions, selectedPortfolio?.id]
+  );
   const automaticSnapshotEnabled = Boolean(
-    selectedSnapshotSettings.automaticDailySnapshotEnabled
-    || selectedSnapshotSettings.autoSnapshotEnabled
-    || selectedSnapshotSettings.snapshotReminderEnabled,
+    selectedSnapshotSettings.automaticDailySnapshotEnabled ||
+    selectedSnapshotSettings.autoSnapshotEnabled ||
+    selectedSnapshotSettings.snapshotReminderEnabled
   );
   const allocationTotal = useMemo(
     () => (selectedPortfolio?.targetAllocations || []).reduce((sum, row) => sum + Number(row.targetRatio || 0), 0),
-    [selectedPortfolio],
+    [selectedPortfolio]
   );
   const validationErrors = useMemo(() => {
     const errors = [];
@@ -213,30 +261,42 @@ export default function PortfolioWorkspace({
     }
     return errors;
   }, [allocationTotal, portfolioHoldings, selectedPortfolio, transactionDraft.holdingId]);
-  const detailTabs = useMemo(() => ([
-    { id: 'overview', label: '总览' },
-    { id: 'holdings', label: '持仓', count: selectedHoldings.length },
-    { id: 'transactions', label: '交易', count: portfolioTransactions.filter((tx) => tx.portfolioId === selectedPortfolio?.id).length },
-    { id: 'analysis', label: '分析' },
-  ]), [portfolioTransactions, selectedHoldings.length, selectedPortfolio?.id]);
-  const portfolioTypeLabel = selectedPortfolio?.type === 'permanent'
-    ? '永久组合'
-    : selectedPortfolio?.type === 'all_weather'
-      ? '全天候模板'
-      : '自定义组合';
+  const detailTabs = useMemo(
+    () => [
+      { id: 'overview', label: '总览' },
+      { id: 'holdings', label: '持仓', count: selectedHoldings.length },
+      {
+        id: 'transactions',
+        label: '交易',
+        count: portfolioTransactions.filter((tx) => tx.portfolioId === selectedPortfolio?.id).length
+      },
+      { id: 'rebalance', label: '再平衡' },
+      { id: 'history', label: '历史', count: selectedSnapshots.length },
+      { id: 'backtest', label: '回测' },
+      { id: 'data', label: '数据' }
+    ],
+    [portfolioTransactions, selectedHoldings.length, selectedPortfolio?.id, selectedSnapshots.length]
+  );
+  const portfolioTypeLabel =
+    selectedPortfolio?.type === 'permanent'
+      ? '永久组合'
+      : selectedPortfolio?.type === 'all_weather'
+        ? '全天候模板'
+        : '自定义组合';
   const targetAssetCount = selectedPortfolio?.targetAllocations?.length || 0;
   const totalReturnRate = dashboard.totalPrincipal > 0 ? dashboard.totalProfit / dashboard.totalPrincipal : 0;
   const assetDrifts = useMemo(
     () => (selectedSummary?.assetClasses || []).map((row) => createAssetDriftDisplay(row)),
-    [selectedSummary],
+    [selectedSummary]
   );
   const rebalanceActions = useMemo(
     () => (rebalancePlan?.items || []).filter((item) => item.action === 'buy' || item.action === 'sell'),
-    [rebalancePlan],
+    [rebalancePlan]
   );
-  const mostImportantDrift = assetDrifts.reduce((current, row) => (
-    Math.abs(row.drift) > Math.abs(current?.drift || 0) ? row : current
-  ), null);
+  const mostImportantDrift = assetDrifts.reduce(
+    (current, row) => (Math.abs(row.drift) > Math.abs(current?.drift || 0) ? row : current),
+    null
+  );
   const hasAllocationWarning = Math.abs(allocationTotal - 1) > 0.0001;
   const portfolioStateTitle = hasAllocationWarning
     ? '目标比例未完成'
@@ -253,25 +313,29 @@ export default function PortfolioWorkspace({
         ? '所有资产均处于目标区间内。'
         : '添加持仓后，可查看资产偏离和再平衡建议。';
   const legacyMigrationPreview = useMemo(
-    () => previewLegacyHoldingsMigration({
-      funds,
-      holdings: legacyHoldings,
-      existingPortfolioHoldings: portfolioHoldings,
-      portfolioId: selectedPortfolio?.id,
-    }),
-    [funds, legacyHoldings, portfolioHoldings, selectedPortfolio?.id],
+    () =>
+      previewLegacyHoldingsMigration({
+        funds,
+        holdings: legacyHoldings,
+        existingPortfolioHoldings: portfolioHoldings,
+        portfolioId: selectedPortfolio?.id
+      }),
+    [funds, legacyHoldings, portfolioHoldings, selectedPortfolio?.id]
   );
   const groupMigrationPreview = useMemo(
-    () => previewGroupHoldingsMigration({
-      funds,
-      groupHoldings,
-      existingPortfolioHoldings: portfolioHoldings,
-      portfolioId: selectedPortfolio?.id,
-    }),
-    [funds, groupHoldings, portfolioHoldings, selectedPortfolio?.id],
+    () =>
+      previewGroupHoldingsMigration({
+        funds,
+        groupHoldings,
+        existingPortfolioHoldings: portfolioHoldings,
+        portfolioId: selectedPortfolio?.id
+      }),
+    [funds, groupHoldings, portfolioHoldings, selectedPortfolio?.id]
   );
   const localFundMatches = useMemo(() => {
-    const query = String(holdingDraft.fundCode || holdingDraft.fundName || '').trim().toLowerCase();
+    const query = String(holdingDraft.fundCode || holdingDraft.fundName || '')
+      .trim()
+      .toLowerCase();
     if (!query || holdingDraft.instrumentType === 'cash') return [];
     return (Array.isArray(funds) ? funds : [])
       .map(normalizePortfolioFundCandidate)
@@ -281,10 +345,12 @@ export default function PortfolioWorkspace({
   }, [funds, holdingDraft.fundCode, holdingDraft.fundName, holdingDraft.instrumentType]);
   const fundSuggestions = useMemo(() => {
     const byCode = new Map();
-    [...localFundMatches, ...holdingFundMatches.map(normalizePortfolioFundCandidate).filter(Boolean)].forEach((fund) => {
-      if (!fund.code || byCode.has(fund.code)) return;
-      byCode.set(fund.code, fund);
-    });
+    [...localFundMatches, ...holdingFundMatches.map(normalizePortfolioFundCandidate).filter(Boolean)].forEach(
+      (fund) => {
+        if (!fund.code || byCode.has(fund.code)) return;
+        byCode.set(fund.code, fund);
+      }
+    );
     return Array.from(byCode.values()).slice(0, 6);
   }, [holdingFundMatches, localFundMatches]);
 
@@ -323,11 +389,11 @@ export default function PortfolioWorkspace({
           ...(portfolioSettings?.portfolioSnapshotSettings || {}),
           [selectedPortfolio.id]: {
             ...(portfolioSettings?.portfolioSnapshotSettings?.[selectedPortfolio.id] || {}),
-            automaticSnapshotConflictMode: 'skip',
-          },
-        },
+            automaticSnapshotConflictMode: 'skip'
+          }
+        }
       },
-      date: today(),
+      date: today()
     });
     if (result.shouldPersist) setPortfolioSnapshots(result.snapshots);
   }, [portfolioHoldings, portfolioSettings, portfolioSnapshots, selectedPortfolio, setPortfolioSnapshots]);
@@ -353,11 +419,18 @@ export default function PortfolioWorkspace({
   };
 
   const addPortfolio = (type = 'custom') => {
-    const usedCustomNumbers = new Set(portfolios.map((portfolio) => customPortfolioNumber(portfolio.name)).filter(Boolean));
+    const usedCustomNumbers = new Set(
+      portfolios.map((portfolio) => customPortfolioNumber(portfolio.name)).filter(Boolean)
+    );
     let nextCustomNumber = 1;
     while (usedCustomNumbers.has(nextCustomNumber)) nextCustomNumber += 1;
     const portfolio = createDefaultPortfolio(type, {
-      name: type === 'permanent' ? '\u6c38\u4e45\u6295\u8d44\u7ec4\u5408' : type === 'all_weather' ? '\u5168\u5929\u5019\u7ec4\u5408' : `\u81ea\u5b9a\u4e49\u7ec4\u5408 ${nextCustomNumber}`,
+      name:
+        type === 'permanent'
+          ? '\u6c38\u4e45\u6295\u8d44\u7ec4\u5408'
+          : type === 'all_weather'
+            ? '\u5168\u5929\u5019\u7ec4\u5408'
+            : `\u81ea\u5b9a\u4e49\u7ec4\u5408 ${nextCustomNumber}`
     });
     setPortfolios((prev) => [...prev, portfolio]);
     setSelectedPortfolioId(portfolio.id);
@@ -371,7 +444,7 @@ export default function PortfolioWorkspace({
     const holding = buildPortfolioHoldingFromDraft({
       portfolioId: selectedPortfolio.id,
       draft: holdingDraft,
-      funds: [...funds, ...holdingFundMatches],
+      funds: [...funds, ...holdingFundMatches]
     });
     setFunds?.((prev) => upsertPortfolioHoldingFund(prev, holding, [...funds, ...holdingFundMatches]));
     setPortfolioHoldings((prev) => [...prev, holding]);
@@ -384,7 +457,7 @@ export default function PortfolioWorkspace({
       costAmount: '',
       estimatedNav: '',
       manualValue: '',
-      valueMode: 'amount',
+      valueMode: 'amount'
     });
     setHoldingFundMatches([]);
     setHoldingDraftErrors([]);
@@ -397,7 +470,7 @@ export default function PortfolioWorkspace({
       ...prev,
       fundCode: candidate.code,
       fundName: candidate.name,
-      estimatedNav: candidate.estimatedNav ? String(candidate.estimatedNav) : prev.estimatedNav,
+      estimatedNav: candidate.estimatedNav ? String(candidate.estimatedNav) : prev.estimatedNav
     }));
     setHoldingFundMatches([]);
     if (candidate.estimatedNav || !candidate.code) return;
@@ -405,24 +478,24 @@ export default function PortfolioWorkspace({
       const detail = await fetchFundData(candidate.code);
       const detailed = normalizePortfolioFundCandidate(detail);
       if (!detailed) return;
-      setHoldingDraft((prev) => (
+      setHoldingDraft((prev) =>
         prev.fundCode === candidate.code
           ? {
               ...prev,
               fundName: prev.fundName || detailed.name,
-              estimatedNav: detailed.estimatedNav ? String(detailed.estimatedNav) : prev.estimatedNav,
+              estimatedNav: detailed.estimatedNav ? String(detailed.estimatedNav) : prev.estimatedNav
             }
           : prev
-      ));
+      );
     } catch {
       // Search result selection still provides code and name; NAV can be entered manually.
     }
   };
 
   const archiveHolding = (holdingId) => {
-    setPortfolioHoldings((prev) => prev.map((holding) => (
-      holding.id === holdingId ? { ...holding, archived: true } : holding
-    )));
+    setPortfolioHoldings((prev) =>
+      prev.map((holding) => (holding.id === holdingId ? { ...holding, archived: true } : holding))
+    );
   };
 
   const recordTransaction = () => {
@@ -431,71 +504,167 @@ export default function PortfolioWorkspace({
     if (!selectedTransactionBaseline) {
       const baseline = createPortfolioTransactionBaseline({
         portfolioId: selectedPortfolio.id,
-        holdings: selectedHoldings,
+        holdings: selectedHoldings
       });
       setPortfolioSettings((prev = {}) => ({
         ...prev,
         transactionBaselines: {
           ...(prev.transactionBaselines || {}),
-          [selectedPortfolio.id]: baseline,
-        },
+          [selectedPortfolio.id]: baseline
+        }
       }));
+    }
+    const normalizedDraft = {
+      ...transactionDraft,
+      id: editingTransactionId || transactionDraft.id,
+      portfolioId: selectedPortfolio.id,
+      holdingId: transactionDraft.holdingId,
+      assetClassId: holding?.assetClassId || 'other',
+      fundCode: holding?.fundCode || '',
+      amount: Number(transactionDraft.amount || 0),
+      share: Number(transactionDraft.share || 0),
+      price: Number(transactionDraft.price || 0),
+      fee: Number(transactionDraft.fee || 0),
+      note: String(transactionDraft.note || '').trim()
+    };
+    if (transactionDraft.type === 'convert') {
+      const targetHolding = portfolioHoldings.find((row) => row.id === transactionDraft.targetHoldingId);
+      if (!targetHolding || targetHolding.id === holding?.id) return;
+      const relationId = `convert-${Date.now()}`;
+      const sourceShare = Math.abs(Number(transactionDraft.share || 0));
+      const sourceCostBasis =
+        Number(holding?.share) > 0
+          ? (Number(holding.costAmount || 0) * Math.min(Number(holding.share), sourceShare)) / Number(holding.share)
+          : Math.abs(Number(transactionDraft.amount || 0));
+      const sourceTransaction = {
+        ...normalizedDraft,
+        id: `${relationId}-out`,
+        type: 'convert_out',
+        relatedTransactionId: `${relationId}-in`,
+        status: transactionDraft.status,
+        costBasisAmount: sourceCostBasis,
+        principalImpact: -sourceCostBasis
+      };
+      const targetTransaction = {
+        ...normalizedDraft,
+        id: `${relationId}-in`,
+        holdingId: targetHolding.id,
+        assetClassId: targetHolding.assetClassId || 'other',
+        fundCode: targetHolding.fundCode || '',
+        type: 'convert_in',
+        share: Number(transactionDraft.targetShare || 0),
+        price: Number(transactionDraft.targetPrice || 0),
+        fee: 0,
+        relatedTransactionId: `${relationId}-out`,
+        status: transactionDraft.status,
+        costBasisAmount: sourceCostBasis,
+        principalImpact: sourceCostBasis
+      };
+      applyTransactionDrafts([sourceTransaction, targetTransaction], { status: transactionDraft.status });
+      resetTransactionDraft();
+      return;
+    }
+    if (editingTransactionId && selectedTransactionBaseline) {
+      const next = rebuildPortfolioAfterTransactionReplace({
+        portfolioId: selectedPortfolio.id,
+        baseline: selectedTransactionBaseline,
+        holdings: portfolioHoldings,
+        transactions: portfolioTransactions,
+        principalRecords: portfolioPrincipalRecords,
+        transaction: normalizedDraft
+      });
+      setPortfolioHoldings(next.holdings);
+      setPortfolioTransactions(next.transactions);
+      setPortfolioPrincipalRecords(next.principalRecords);
+      resetTransactionDraft();
+      return;
     }
     const result = applyPortfolioTransaction({
       holdings: portfolioHoldings,
       principalRecords: portfolioPrincipalRecords,
-      transaction: {
-        ...transactionDraft,
-        portfolioId: selectedPortfolio.id,
-        holdingId: transactionDraft.holdingId,
-        assetClassId: holding?.assetClassId || 'other',
-        fundCode: holding?.fundCode || '',
-        amount: Number(transactionDraft.amount || 0),
-        share: Number(transactionDraft.share || 0),
-        price: Number(transactionDraft.price || 0),
-        fee: Number(transactionDraft.fee || 0),
-      },
+      transaction: normalizedDraft
     });
     setPortfolioHoldings(result.holdings);
     setPortfolioTransactions((prev) => [...prev, result.transaction]);
     setPortfolioPrincipalRecords(result.principalRecords);
-    setTransactionDraft({ type: 'buy', holdingId: '', amount: '', share: '', price: '', fee: '', date: today() });
+    resetTransactionDraft();
   };
 
-  const applyTransactionDrafts = (drafts = []) => {
+  const resetTransactionDraft = () => {
+    setEditingTransactionId('');
+    setTransactionDraft({
+      type: 'buy',
+      holdingId: '',
+      targetHoldingId: '',
+      amount: '',
+      share: '',
+      targetShare: '',
+      price: '',
+      targetPrice: '',
+      fee: '',
+      note: '',
+      status: 'confirmed',
+      date: today()
+    });
+  };
+
+  const editTransaction = (transaction) => {
+    if (!transaction?.id) return;
+    setEditingTransactionId(transaction.id);
+    setTransactionDraft({
+      type: transaction.type || 'buy',
+      holdingId: transaction.holdingId || '',
+      targetHoldingId: '',
+      amount: String(transaction.amount ?? ''),
+      share: String(transaction.share ?? ''),
+      targetShare: '',
+      price: String(transaction.price ?? ''),
+      targetPrice: '',
+      fee: String(transaction.fee ?? ''),
+      note: transaction.note || '',
+      status: transaction.status || 'confirmed',
+      date: transaction.date || today()
+    });
+  };
+
+  const applyTransactionDrafts = (drafts = [], { status = 'confirmed' } = {}) => {
     if (!selectedPortfolio || !drafts.length) return;
     if (!selectedTransactionBaseline) {
       const baseline = createPortfolioTransactionBaseline({
         portfolioId: selectedPortfolio.id,
-        holdings: selectedHoldings,
+        holdings: selectedHoldings
       });
       setPortfolioSettings((prev = {}) => ({
         ...prev,
         transactionBaselines: {
           ...(prev.transactionBaselines || {}),
-          [selectedPortfolio.id]: baseline,
-        },
+          [selectedPortfolio.id]: baseline
+        }
       }));
     }
-    const result = drafts.reduce((ledger, draft, index) => {
-      const applied = applyPortfolioTransaction({
-        holdings: ledger.holdings,
-        principalRecords: ledger.principalRecords,
-        transaction: {
-          ...draft,
-          id: `${draft.id}_${Date.now()}_${index}`,
-        },
-      });
-      return {
-        holdings: applied.holdings,
-        transactions: [...ledger.transactions, applied.transaction],
-        principalRecords: applied.principalRecords,
-      };
-    }, {
-      holdings: portfolioHoldings,
-      transactions: portfolioTransactions,
-      principalRecords: portfolioPrincipalRecords,
-    });
+    const result = drafts.reduce(
+      (ledger, draft, index) => {
+        const applied = applyPortfolioTransaction({
+          holdings: ledger.holdings,
+          principalRecords: ledger.principalRecords,
+          transaction: {
+            ...draft,
+            id: draft.relatedTransactionId ? draft.id : `${draft.id}_${Date.now()}_${index}`,
+            status: draft.status || status
+          }
+        });
+        return {
+          holdings: applied.holdings,
+          transactions: [...ledger.transactions, applied.transaction],
+          principalRecords: applied.principalRecords
+        };
+      },
+      {
+        holdings: portfolioHoldings,
+        transactions: portfolioTransactions,
+        principalRecords: portfolioPrincipalRecords
+      }
+    );
     setPortfolioHoldings(result.holdings);
     setPortfolioTransactions(result.transactions);
     setPortfolioPrincipalRecords(result.principalRecords);
@@ -509,7 +678,7 @@ export default function PortfolioWorkspace({
       holdings: portfolioHoldings,
       transactions: portfolioTransactions,
       principalRecords: portfolioPrincipalRecords,
-      transactionId,
+      transactionId
     });
     setPortfolioHoldings(next.holdings);
     setPortfolioTransactions(next.transactions);
@@ -518,22 +687,59 @@ export default function PortfolioWorkspace({
 
   const deleteTransaction = (transaction) => {
     if (!transaction?.id) return;
-    if (typeof window !== 'undefined' && !window.confirm('删除这条交易并重建当前组合流水？')) return;
+    const impact = getPortfolioTransactionDeleteImpact({
+      portfolioId: selectedPortfolio?.id,
+      transaction,
+      transactions: portfolioTransactions,
+      principalRecords: portfolioPrincipalRecords
+    });
+    const message = [
+      `删除 ${transaction.date || ''} 的这条交易？`,
+      `系统将从组合基线重放后续 ${impact.followingTransactions} 笔交易，重算 ${impact.principalRecords} 条本金记录，影响 ${impact.affectedHoldingIds.length} 个持仓。`
+    ].join('\n');
+    if (typeof window !== 'undefined' && !window.confirm(message)) return;
     applyLedgerRebuild({ transactionId: transaction.id });
   };
 
-  const recordSnapshot = () => {
+  const recordSnapshot = (note = '') => {
     if (!selectedPortfolio) return;
+    const date = today();
+    const existing = portfolioSnapshots.find((row) => row.portfolioId === selectedPortfolio.id && row.date === date);
+    if (
+      existing &&
+      typeof window !== 'undefined' &&
+      !window.confirm(`今天已经有一条快照。是否用当前资产数据覆盖 ${date} 的记录？`)
+    ) {
+      return;
+    }
     const snapshot = createPortfolioSnapshot({
       portfolio: selectedPortfolio,
       holdings: portfolioHoldings,
-      date: today(),
+      date,
       source: 'manual',
+      note: String(note || '').trim()
     });
     setPortfolioSnapshots((prev) => {
       const next = prev.filter((row) => !(row.portfolioId === snapshot.portfolioId && row.date === snapshot.date));
       return [...next, snapshot].sort((a, b) => a.date.localeCompare(b.date));
     });
+    if (existing) {
+      const version = createSnapshotVersionEntry(existing);
+      if (version) {
+        setPortfolioSettings((prev = {}) => ({
+          ...prev,
+          snapshotVersions: [version, ...(prev.snapshotVersions || [])]
+        }));
+      }
+    }
+  };
+
+  const restoreSnapshot = (version) => {
+    setPortfolioSnapshots((prev) => restoreSnapshotVersion({ snapshots: prev, version }));
+    setPortfolioSettings((prev = {}) => ({
+      ...prev,
+      snapshotVersions: (prev.snapshotVersions || []).filter((row) => row.id !== version?.id)
+    }));
   };
 
   const exportJson = () => {
@@ -545,7 +751,7 @@ export default function PortfolioWorkspace({
       portfolioSnapshots,
       portfolioBacktests,
       portfolioSettings,
-      portfolioSchemaVersion,
+      portfolioSchemaVersion
     });
     setImportText(text);
   };
@@ -569,16 +775,32 @@ export default function PortfolioWorkspace({
     setSelectedPortfolioId(parsed.portfolios?.[0]?.id || '');
   };
 
-  const analyzeCsvImport = ({ csv, type }) => {
+  const analyzeCsvImport = ({ csv, type, conflictMode }) => {
     const result = analyzePortfolioCsvImport({
       csv,
       type,
       knownFunds: funds,
       validPortfolioIds: portfolios.map((portfolio) => portfolio.id),
-      validHoldingIds: portfolioHoldings.map((holding) => holding.id),
+      validHoldingIds: portfolioHoldings.map((holding) => holding.id)
     });
-    setCsvAnalysis(result);
-    return result;
+    const currentRowsByType = {
+      portfolioHoldings,
+      portfolioTransactions,
+      portfolioSnapshots
+    };
+    const currentRows = currentRowsByType[type] || [];
+    const conflictPreview = buildPortfolioImportConflictPreview({
+      type,
+      importedRows: result.rows,
+      currentRows,
+      conflictMode
+    });
+    const enriched = {
+      ...result,
+      ...conflictPreview
+    };
+    setCsvAnalysis(enriched);
+    return enriched;
   };
 
   const applyCsvImport = ({ type, conflictMode, analysis }) => {
@@ -589,16 +811,42 @@ export default function PortfolioWorkspace({
     } else if (type === 'portfolioTransactions') {
       setPortfolioTransactions((prev) => applyImportedRows(prev, rows, conflictMode));
     } else if (type === 'portfolioSnapshots') {
-      setPortfolioSnapshots((prev) => applyImportedRows(prev, rows, conflictMode));
+      setPortfolioSnapshots((current) => {
+        const next = [...current];
+        rows.forEach((row) => {
+          const index = next.findIndex(
+            (existing) => existing.portfolioId === row.portfolioId && existing.date === row.date
+          );
+          if (index < 0) next.push(row);
+          else if (conflictMode === 'overwrite') next[index] = row;
+          else if (conflictMode === 'merge') next[index] = mergeImportedRecord(next[index], row);
+        });
+        return next;
+      });
     }
     return analysis;
+  };
+
+  const applyExcelSnapshots = ({ snapshots, conflictMode }) => {
+    setPortfolioSnapshots((current) => {
+      const rows = Array.isArray(current) ? [...current] : [];
+      snapshots.forEach((snapshot) => {
+        const index = rows.findIndex((row) => row.portfolioId === snapshot.portfolioId && row.date === snapshot.date);
+        if (index < 0) {
+          rows.push(snapshot);
+        } else if (conflictMode === 'overwrite') {
+          rows[index] = snapshot;
+        }
+      });
+      return rows.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    });
   };
 
   const exportCsv = ({ type }) => {
     const rowsByType = {
       portfolioHoldings: portfolioHoldings.filter((row) => row.portfolioId === selectedPortfolio?.id),
       portfolioTransactions: portfolioTransactions.filter((row) => row.portfolioId === selectedPortfolio?.id),
-      portfolioSnapshots: portfolioSnapshots.filter((row) => row.portfolioId === selectedPortfolio?.id),
+      portfolioSnapshots: portfolioSnapshots.filter((row) => row.portfolioId === selectedPortfolio?.id)
     };
     return exportPortfolioCsv({ type, rows: rowsByType[type] || [] });
   };
@@ -621,9 +869,9 @@ export default function PortfolioWorkspace({
         ...(prev.portfolioSnapshotSettings || {}),
         [selectedPortfolio.id]: {
           ...(prev.portfolioSnapshotSettings?.[selectedPortfolio.id] || {}),
-          automaticDailySnapshotEnabled: enabled,
-        },
-      },
+          automaticDailySnapshotEnabled: enabled
+        }
+      }
     }));
   };
 
@@ -635,7 +883,11 @@ export default function PortfolioWorkspace({
     if (!portfolioId) return;
     const portfolio = portfolios.find((row) => row.id === portfolioId);
     const portfolioName = portfolio?.name || '当前组合';
-    if (typeof window !== 'undefined' && !window.confirm(`删除“${portfolioName}”？该组合下的持仓、交易和历史记录也会一起删除。`)) return;
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(`删除“${portfolioName}”？该组合下的持仓、交易和历史记录也会一起删除。`)
+    )
+      return;
     const nextPortfolio = activePortfolios.find((row) => row.id !== portfolioId);
     setPortfolios((prev) => prev.filter((row) => row.id !== portfolioId));
     setPortfolioHoldings((prev) => prev.filter((row) => row.portfolioId !== portfolioId));
@@ -677,9 +929,15 @@ export default function PortfolioWorkspace({
           </p>
         </div>
         <div className="portfolio-toolbar-actions">
-          <select className="select" value={selectedPortfolio?.id || ''} onChange={(e) => setSelectedPortfolioId(e.target.value)}>
+          <select
+            className="select"
+            value={selectedPortfolio?.id || ''}
+            onChange={(e) => setSelectedPortfolioId(e.target.value)}
+          >
             {activePortfolios.map((portfolio) => (
-              <option key={portfolio.id} value={portfolio.id}>{portfolio.name}</option>
+              <option key={portfolio.id} value={portfolio.id}>
+                {portfolio.name}
+              </option>
             ))}
           </select>
           <button type="button" className="button secondary" onClick={() => addPortfolio('custom')}>
@@ -709,11 +967,34 @@ export default function PortfolioWorkspace({
           <strong>¥{money(dashboard.totalValue)}</strong>
         </div>
         <div className="portfolio-secondary-metrics">
-          <Metric label="总收益" value={`¥${money(dashboard.totalProfit)}`} tone={dashboard.totalProfit >= 0 ? 'up' : 'down'} compact />
+          <Metric
+            label="总收益"
+            value={`¥${money(dashboard.totalProfit)}`}
+            tone={dashboard.totalProfit >= 0 ? 'up' : 'down'}
+            compact
+          />
           <Metric label="总收益率" value={pct(totalReturnRate)} tone={totalReturnRate >= 0 ? 'up' : 'down'} compact />
-          <Metric label="今日预估" value={`¥${money(dashboard.dailyEstimatedProfit)}`} tone={dashboard.dailyEstimatedProfit >= 0 ? 'up' : 'down'} compact />
+          <Metric
+            label="今日预估"
+            value={`¥${money(dashboard.dailyEstimatedProfit)}`}
+            tone={dashboard.dailyEstimatedProfit >= 0 ? 'up' : 'down'}
+            compact
+          />
           <Metric label="总本金" value={`¥${money(dashboard.totalPrincipal)}`} compact />
         </div>
+        <label className="portfolio-archive-toggle">
+          <input
+            type="checkbox"
+            checked={includeArchivedPortfolios}
+            onChange={(event) =>
+              setPortfolioSettings((prev = {}) => ({
+                ...prev,
+                includeArchivedPortfolios: event.target.checked
+              }))
+            }
+          />
+          汇总包含已归档组合
+        </label>
       </div>
 
       <PortfolioDetailTabs
@@ -724,138 +1005,233 @@ export default function PortfolioWorkspace({
         errors={validationErrors}
       />
 
-      <div className={`portfolio-layout ${activeDetailTab === 'holdings' ? 'is-holdings' : ''}`}>
+      <div
+        className={`portfolio-layout ${activeDetailTab === 'holdings' ? 'is-holdings' : ''} ${activeDetailTab === 'data' ? 'is-data' : ''} ${['rebalance', 'history', 'backtest'].includes(activeDetailTab) ? 'is-full' : ''}`}
+      >
         <div className="portfolio-main">
           {activeDetailTab === 'overview' && (
-          <Panel title="组合概览">
-            {selectedSummary && (
-              <div className="portfolio-summary-grid">
-                <Metric label="当前金额" value={`¥${money(selectedSummary.totalValue)}`} compact />
-                <Metric label="总收益率" value={pct(selectedSummary.totalReturnRate)} compact tone={selectedSummary.totalReturnRate >= 0 ? 'up' : 'down'} />
-                <Metric label="目标偏离度" value={pct(selectedSummary.theta)} compact />
-                <Metric label="持仓数量" value={selectedSummary.holdingCount} compact />
-              </div>
-            )}
-            <div className="portfolio-asset-bars">
-              {assetDrifts.length > 0 ? assetDrifts.map((drift) => {
-                return (
-                <div key={drift.assetClassId} className={`portfolio-asset-row is-${drift.tone}`}>
-                  <div className="portfolio-asset-head">
-                    <strong>{drift.assetClassName}</strong>
-                    <em>{drift.statusText}</em>
-                  </div>
-                  <div className="portfolio-asset-meta">
-                    <span>当前 {pct(drift.currentRatio)}</span>
-                    <span>目标 {pct(drift.targetRatio)}</span>
-                    <span>区间 {pct(drift.lowerRatio)}-{pct(drift.upperRatio)}</span>
-                    <strong>{drift.driftText}</strong>
-                  </div>
-                  <div className="portfolio-asset-track" aria-label={`${drift.assetClassName} 当前 ${pct(drift.currentRatio)} 目标 ${pct(drift.targetRatio)}`}>
-                    <div
-                      className="portfolio-asset-range"
-                      style={{
-                        left: `${drift.rangeStart}%`,
-                        width: `${Math.max(0, drift.rangeEnd - drift.rangeStart)}%`,
-                      }}
-                    />
-                    <i className="portfolio-asset-target" style={{ left: `${drift.targetPosition}%` }} aria-hidden="true" />
-                    <b className="portfolio-asset-current" style={{ left: `${drift.currentPosition}%` }} aria-hidden="true" />
-                  </div>
-                  <div className="portfolio-asset-axis" aria-hidden="true">
-                    <span>低配</span>
-                    <span>目标</span>
-                    <span>超配</span>
-                  </div>
+            <Panel title="组合概览">
+              {selectedSummary && (
+                <div className="portfolio-summary-grid">
+                  <Metric label="当前金额" value={`¥${money(selectedSummary.totalValue)}`} compact />
+                  <Metric
+                    label="总收益率"
+                    value={pct(selectedSummary.totalReturnRate)}
+                    compact
+                    tone={selectedSummary.totalReturnRate >= 0 ? 'up' : 'down'}
+                  />
+                  <Metric label="目标偏离度" value={pct(selectedSummary.theta)} compact />
+                  <Metric label="持仓数量" value={selectedSummary.holdingCount} compact />
                 </div>
-                );
-              }) : (
-                <EmptyHint
-                  title="还没有资产分布"
-                  description="添加持仓后，这里会显示当前比例、目标比例和偏离情况。"
-                />
               )}
-            </div>
-            {selectedRiskMetrics && (
-              <div className="portfolio-table-wrap">
-                <table className="portfolio-table">
-                  <thead>
-                    <tr>
-                      <th>风险 / 贡献</th>
-                      <th>数值</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>风险提醒</td>
-                      <td>共 {selectedRiskMetrics.alertSummary.total} 条，高风险 {selectedRiskMetrics.alertSummary.high} 条</td>
-                    </tr>
-                    <tr>
-                      <td>快照数量</td>
-                      <td>{selectedRiskMetrics.trend.snapshotCount}</td>
-                    </tr>
-                    <tr>
-                      <td>最近资产变化</td>
-                      <td>¥{money(selectedRiskMetrics.trend.latestChange)}</td>
-                    </tr>
-                    <tr>
-                      <td>最大回撤</td>
-                      <td>{pct(selectedRiskMetrics.trend.maxDrawdown)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                {selectedRiskMetrics.alerts.length > 0 && (
-                  <ul className="portfolio-import-errors">
-                    {selectedRiskMetrics.alerts.slice(0, 3).map((alert) => (
-                      <li key={`${alert.code}-${alert.assetClassId || 'portfolio'}`}>{alert.title}: {alert.message}</li>
-                    ))}
-                  </ul>
+              <div className="portfolio-asset-bars">
+                {selectedHoldings.length > 0 && assetDrifts.length > 0 ? (
+                  assetDrifts.map((drift) => {
+                    return (
+                      <div key={drift.assetClassId} className={`portfolio-asset-row is-${drift.tone}`}>
+                        <div className="portfolio-asset-head">
+                          <strong>{drift.assetClassName}</strong>
+                          <em>{drift.statusText}</em>
+                        </div>
+                        <div className="portfolio-asset-meta">
+                          <span>当前 {pct(drift.currentRatio)}</span>
+                          <span>目标 {pct(drift.targetRatio)}</span>
+                          <span>
+                            区间 {pct(drift.lowerRatio)}-{pct(drift.upperRatio)}
+                          </span>
+                          <strong>{drift.driftText}</strong>
+                        </div>
+                        <div
+                          className="portfolio-asset-track"
+                          aria-label={`${drift.assetClassName} 当前 ${pct(drift.currentRatio)} 目标 ${pct(drift.targetRatio)}`}
+                        >
+                          <div
+                            className="portfolio-asset-range"
+                            style={{
+                              left: `${drift.rangeStart}%`,
+                              width: `${Math.max(0, drift.rangeEnd - drift.rangeStart)}%`
+                            }}
+                          />
+                          <i
+                            className="portfolio-asset-target"
+                            style={{ left: `${drift.targetPosition}%` }}
+                            aria-hidden="true"
+                          />
+                          <b
+                            className="portfolio-asset-current"
+                            style={{ left: `${drift.currentPosition}%` }}
+                            aria-hidden="true"
+                          />
+                        </div>
+                        <div className="portfolio-asset-axis" aria-hidden="true">
+                          <span>低配</span>
+                          <span>目标</span>
+                          <span>超配</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <EmptyHint
+                    title="还没有资产分布"
+                    description="添加持仓后，这里会显示当前比例、目标比例和偏离情况。"
+                  />
                 )}
               </div>
-            )}
-          </Panel>
+              {selectedRiskMetrics && (
+                <div className="portfolio-table-wrap">
+                  <table className="portfolio-table">
+                    <thead>
+                      <tr>
+                        <th>风险 / 贡献</th>
+                        <th>数值</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>风险提醒</td>
+                        <td>
+                          共 {selectedRiskMetrics.alertSummary.total} 条，高风险 {selectedRiskMetrics.alertSummary.high}{' '}
+                          条
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>快照数量</td>
+                        <td>{selectedRiskMetrics.trend.snapshotCount}</td>
+                      </tr>
+                      <tr>
+                        <td>最近资产变化</td>
+                        <td>¥{money(selectedRiskMetrics.trend.latestChange)}</td>
+                      </tr>
+                      <tr>
+                        <td>最大回撤</td>
+                        <td>{pct(selectedRiskMetrics.trend.maxDrawdown)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  {selectedRiskMetrics.alerts.length > 0 && (
+                    <ul className="portfolio-import-errors">
+                      {selectedRiskMetrics.alerts.slice(0, 3).map((alert) => (
+                        <li key={`${alert.code}-${alert.assetClassId || 'portfolio'}`}>
+                          {alert.title}: {alert.message}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {selectedInsights && (
+                <div className="portfolio-insights">
+                  <div className="portfolio-health-score">
+                    <span>组合健康评分</span>
+                    <strong>{selectedInsights.score}</strong>
+                    <em>{selectedInsights.grade}</em>
+                  </div>
+                  <div className="portfolio-insight-list">
+                    {selectedInsights.insights.map((insight) => (
+                      <article key={insight.code} className={`is-${insight.severity}`}>
+                        <strong>{insight.title}</strong>
+                        <span>{insight.reason}</span>
+                        <p>{insight.action}</p>
+                      </article>
+                    ))}
+                  </div>
+                  {selectedInsights.quality.issues.length > 0 && (
+                    <details className="portfolio-quality-details">
+                      <summary>
+                        数据质量：高 {selectedInsights.quality.high} · 中 {selectedInsights.quality.medium} · 低{' '}
+                        {selectedInsights.quality.low}
+                      </summary>
+                      <ul>
+                        {selectedInsights.quality.issues.map((issue, index) => (
+                          <li key={`${issue.code}-${issue.holdingId || index}`}>{issue.message}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )}
+            </Panel>
           )}
 
           {activeDetailTab === 'holdings' && (
-          <Panel title="持仓">
-            <div className="portfolio-table-wrap portfolio-holdings-wrap">
-              <table className="portfolio-table portfolio-holdings-table">
-                <thead>
-                  <tr>
-                    <th>资产</th>
-                    <th>类别</th>
-                    <th>份额</th>
-                    <th>本金</th>
-                    <th>市值</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedHoldings.length ? selectedHoldings.map((holding) => {
-                    const nav = holding.manualValue ?? holding.currentValue ?? (holding.share || 0) * (holding.estimatedNav ?? holding.currentNav ?? holding.costPrice ?? 0);
-                    return (
-                      <tr key={holding.id}>
-                        <td>{holding.fundName}</td>
-                        <td>{ASSET_CLASSES.find((row) => row.id === holding.assetClassId)?.name || holding.assetClassId}</td>
-                        <td>{money(holding.share)}</td>
-                        <td>¥{money(holding.costAmount)}</td>
-                        <td>¥{money(nav)}</td>
-                        <td>
-                          <button type="button" className="button ghost portfolio-row-action" onClick={() => archiveHolding(holding.id)}>
-                            <Trash2 size={15} />
-                            移除
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  }) : (
+            <Panel title="持仓">
+              <div className="portfolio-table-wrap portfolio-holdings-wrap">
+                <table className="portfolio-table portfolio-holdings-table">
+                  <thead>
                     <tr>
-                      <td colSpan={6}>暂无持仓。请使用右侧表单添加基金、现金或手动资产。</td>
+                      <th>资产</th>
+                      <th>类别</th>
+                      <th>份额</th>
+                      <th>当前净值</th>
+                      <th>本金</th>
+                      <th>市值</th>
+                      <th>今日收益</th>
+                      <th>累计收益</th>
+                      <th>当前 / 目标</th>
+                      <th>偏离</th>
+                      <th>操作</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
+                  </thead>
+                  <tbody>
+                    {selectedHoldings.length ? (
+                      selectedHoldings.map((holding) => {
+                        const metrics = calculateHoldingMetrics(holding);
+                        const assetClass = selectedSummary?.assetClasses?.find(
+                          (row) => row.assetClassId === holding.assetClassId
+                        );
+                        const currentRatio =
+                          selectedSummary?.totalValue > 0 ? metrics.currentValue / selectedSummary.totalValue : 0;
+                        const targetRatio = Number(assetClass?.targetRatio || 0);
+                        const drift = currentRatio - targetRatio;
+                        const unitNav = holding.estimatedNav ?? holding.currentNav ?? holding.costPrice ?? 0;
+                        return (
+                          <tr key={holding.id}>
+                            <td>{holding.fundName}</td>
+                            <td>
+                              {ASSET_CLASSES.find((row) => row.id === holding.assetClassId)?.name ||
+                                holding.assetClassId}
+                            </td>
+                            <td>{money(holding.share)}</td>
+                            <td>{holding.instrumentType === 'fund' ? money(unitNav) : '-'}</td>
+                            <td>¥{money(holding.costAmount)}</td>
+                            <td>¥{money(metrics.currentValue)}</td>
+                            <td className={metrics.dailyEstimatedProfit >= 0 ? 'is-up' : 'is-down'}>
+                              ¥{money(metrics.dailyEstimatedProfit)}
+                            </td>
+                            <td className={metrics.totalProfit >= 0 ? 'is-up' : 'is-down'}>
+                              ¥{money(metrics.totalProfit)}
+                              <small>{pct(metrics.totalReturnRate)}</small>
+                            </td>
+                            <td>
+                              {pct(currentRatio)} / {pct(targetRatio)}
+                            </td>
+                            <td className={drift > 0 ? 'is-up' : drift < 0 ? 'is-down' : ''}>
+                              {drift > 0 ? '+' : ''}
+                              {pct(drift)}
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="button ghost portfolio-row-action"
+                                onClick={() => archiveHolding(holding.id)}
+                              >
+                                <Trash2 size={15} />
+                                移除
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={11}>暂无持仓。请使用右侧表单添加基金、现金或手动资产。</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
           )}
 
           {activeDetailTab === 'transactions' && (
@@ -864,99 +1240,128 @@ export default function PortfolioWorkspace({
               holdings={portfolioHoldings}
               transactions={portfolioTransactions}
               principalRecords={portfolioPrincipalRecords}
+              onEditTransaction={editTransaction}
               onDeleteTransaction={deleteTransaction}
               onRebuildLedger={() => applyLedgerRebuild()}
               canMutateLedger={Boolean(selectedTransactionBaseline)}
             />
           )}
 
-          {activeDetailTab === 'analysis' && (
+          {activeDetailTab === 'rebalance' && (
             <>
-            <Panel title="再平衡详情">
-              <div className="portfolio-rebalance-list">
-                {(rebalancePlan?.items || []).length ? (rebalancePlan?.items || []).map((item) => (
-                  <div key={item.assetClassId} className={`portfolio-rebalance-item is-${item.action}`}>
-                    <span>{item.assetClassName}</span>
-                    <strong>{item.action === 'buy' ? '买入' : item.action === 'sell' ? '卖出' : '保持'}</strong>
-                    <em>¥{money(Math.abs(item.rebalanceAmount))}</em>
-                  </div>
-                )) : (
-                  <EmptyHint
-                    title="暂无再平衡建议"
-                    description="设置目标比例并录入持仓后，系统会计算每类资产需要买入、卖出或保持。"
+              <Panel title="再平衡详情">
+                <div className="portfolio-rebalance-list">
+                  {(rebalancePlan?.items || []).length ? (
+                    (rebalancePlan?.items || []).map((item) => (
+                      <div key={item.assetClassId} className={`portfolio-rebalance-item is-${item.action}`}>
+                        <span>{item.assetClassName}</span>
+                        <strong>{item.action === 'buy' ? '买入' : item.action === 'sell' ? '卖出' : '保持'}</strong>
+                        <em>¥{money(Math.abs(item.rebalanceAmount))}</em>
+                      </div>
+                    ))
+                  ) : (
+                    <EmptyHint
+                      title="暂无再平衡建议"
+                      description="设置目标比例并录入持仓后，系统会计算每类资产需要买入、卖出或保持。"
+                    />
+                  )}
+                </div>
+                <div className="portfolio-inline-form">
+                  <input
+                    className="input"
+                    value={cashflowAmount}
+                    onChange={(e) => setCashflowAmount(e.target.value)}
+                    placeholder="新增/取出资金"
                   />
-                )}
-              </div>
-              <div className="portfolio-inline-form">
-                <input className="input" value={cashflowAmount} onChange={(e) => setCashflowAmount(e.target.value)} placeholder="新增/取出资金" />
-                <span className="muted">
-                  {smartCashPlan?.mode || 'smart_fill'}：
-                  {(smartCashPlan?.items || []).map((item) => `${item.assetClassName} ¥${money(item.amount)}`).join('；') || '输入金额查看建议'}
-                </span>
-              </div>
-              <div className="portfolio-table-wrap">
-                <table className="portfolio-table">
-                  <thead>
-                    <tr>
-                      <th>执行动作</th>
-                      <th>资产</th>
-                      <th>金额</th>
-                      <th>份额</th>
-                      <th>价格</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rebalanceTransactionDrafts.length ? rebalanceTransactionDrafts.map((draft) => (
-                      <tr key={draft.id}>
-                        <td>{draft.type}</td>
-                        <td>{draft.assetClassId}</td>
-                        <td>¥{money(draft.amount)}</td>
-                        <td>{money(draft.share)}</td>
-                        <td>{money(draft.price)}</td>
-                      </tr>
-                    )) : (
+                  <span className="muted">
+                    {smartCashPlan?.mode || 'smart_fill'}：
+                    {(smartCashPlan?.items || [])
+                      .map((item) => `${item.assetClassName} ¥${money(item.amount)}`)
+                      .join('；') || '输入金额查看建议'}
+                  </span>
+                </div>
+                <div className="portfolio-table-wrap">
+                  <table className="portfolio-table">
+                    <thead>
                       <tr>
-                        <td colSpan={5}>暂无可执行草案。需要存在对应资产类别的持仓。</td>
+                        <th>执行动作</th>
+                        <th>资产</th>
+                        <th>金额</th>
+                        <th>份额</th>
+                        <th>价格</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <button
-                type="button"
-                className="button"
-                onClick={() => applyTransactionDrafts(rebalanceTransactionDrafts)}
-                disabled={!rebalanceTransactionDrafts.length}
-              >
-                <Save size={16} />
-                应用再平衡草案
-              </button>
-            </Panel>
-            <PortfolioSmartTradePanel
-              portfolio={selectedPortfolio}
-              holdings={portfolioHoldings}
-              funds={funds}
-              onApplyDrafts={applyTransactionDrafts}
-            />
-            <PortfolioHistoryImportPanel
-              snapshots={selectedSnapshots}
-              importText={importText}
-              onImportTextChange={(next) => {
-                setImportText(next);
-                setImportAnalysis(null);
-              }}
-              onAnalyze={analyzeImport}
-              analysis={importAnalysis}
-              onApplyImport={applyAnalyzedImport}
-              onRecordSnapshot={recordSnapshot}
-              snapshotAutoEnabled={automaticSnapshotEnabled}
-              onSnapshotAutoEnabledChange={setAutomaticSnapshotEnabled}
-            />
-            <PortfolioBacktestPanel
-              portfolioId={selectedPortfolio?.id}
-              portfolioBacktests={portfolioBacktests}
-              setPortfolioBacktests={setPortfolioBacktests}
-            />
+                    </thead>
+                    <tbody>
+                      {rebalanceTransactionDrafts.length ? (
+                        rebalanceTransactionDrafts.map((draft) => (
+                          <tr key={draft.id}>
+                            <td>{draft.type}</td>
+                            <td>{draft.assetClassId}</td>
+                            <td>¥{money(draft.amount)}</td>
+                            <td>{money(draft.share)}</td>
+                            <td>{money(draft.price)}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5}>暂无可执行草案。需要存在对应资产类别的持仓。</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => applyTransactionDrafts(rebalanceTransactionDrafts)}
+                  disabled={!rebalanceTransactionDrafts.length}
+                >
+                  <Save size={16} />
+                  应用再平衡草案
+                </button>
+              </Panel>
+              <PortfolioSmartTradePanel
+                portfolio={selectedPortfolio}
+                holdings={portfolioHoldings}
+                funds={funds}
+                onApplyDrafts={applyTransactionDrafts}
+              />
+            </>
+          )}
+
+          {activeDetailTab === 'history' && (
+            <>
+              <PortfolioHistoryImportPanel
+                snapshots={selectedSnapshots}
+                transactions={portfolioTransactions.filter(
+                  (transaction) => transaction.portfolioId === selectedPortfolio?.id
+                )}
+                importText={importText}
+                onImportTextChange={(next) => {
+                  setImportText(next);
+                  setImportAnalysis(null);
+                }}
+                onAnalyze={analyzeImport}
+                analysis={importAnalysis}
+                onApplyImport={applyAnalyzedImport}
+                onRecordSnapshot={recordSnapshot}
+                snapshotVersions={selectedSnapshotVersions}
+                onRestoreSnapshotVersion={restoreSnapshot}
+                snapshotAutoEnabled={automaticSnapshotEnabled}
+                onSnapshotAutoEnabledChange={setAutomaticSnapshotEnabled}
+              />
+              <PortfolioExcelImportPanel portfolioId={selectedPortfolio?.id} onApply={applyExcelSnapshots} />
+            </>
+          )}
+
+          {activeDetailTab === 'backtest' && (
+            <>
+              <PortfolioBacktestPanel
+                portfolio={selectedPortfolio}
+                holdings={selectedHoldings}
+                portfolioBacktests={portfolioBacktests}
+                setPortfolioBacktests={setPortfolioBacktests}
+              />
             </>
           )}
         </div>
@@ -964,176 +1369,336 @@ export default function PortfolioWorkspace({
         <aside className="portfolio-side">
           {activeDetailTab === 'overview' && (
             <>
-            <Panel title="组合状态">
-              <div className={`portfolio-state-card ${rebalanceActions.length || hasAllocationWarning ? 'is-attention' : 'is-ok'}`}>
-                <span>{portfolioStateTitle}</span>
-                <strong>{selectedSummary ? pct(selectedSummary.theta) : pct(0)}</strong>
-                <em>目标偏离度</em>
-              </div>
-              <p className="portfolio-panel-intro">{portfolioStateDescription}</p>
-              {mostImportantDrift && (
-                <div className={`portfolio-side-drift is-${mostImportantDrift.tone}`}>
-                  <span>最大偏离</span>
-                  <strong>{mostImportantDrift.assetClassName}</strong>
-                  <em>{mostImportantDrift.driftText}</em>
+              <Panel title="组合状态">
+                <div
+                  className={`portfolio-state-card ${rebalanceActions.length || hasAllocationWarning ? 'is-attention' : 'is-ok'}`}
+                >
+                  <span>{portfolioStateTitle}</span>
+                  <strong>{selectedSummary ? pct(selectedSummary.theta) : pct(0)}</strong>
+                  <em>目标偏离度</em>
                 </div>
-              )}
-            </Panel>
-
-            <Panel title="再平衡建议">
-              <div className="portfolio-rebalance-list">
-                {rebalanceActions.length ? rebalanceActions.slice(0, 4).map((item) => (
-                  <div key={item.assetClassId} className={`portfolio-rebalance-item is-${item.action}`}>
-                    <span>{item.assetClassName}</span>
-                    <strong>{item.action === 'buy' ? '建议买入' : '建议卖出'}</strong>
-                    <em>¥{money(Math.abs(item.rebalanceAmount))}</em>
+                <p className="portfolio-panel-intro">{portfolioStateDescription}</p>
+                {selectedHoldings.length > 0 && mostImportantDrift && (
+                  <div className={`portfolio-side-drift is-${mostImportantDrift.tone}`}>
+                    <span>最大偏离</span>
+                    <strong>{mostImportantDrift.assetClassName}</strong>
+                    <em>{mostImportantDrift.driftText}</em>
                   </div>
-                )) : (
-                  <EmptyHint
-                    title={selectedHoldings.length ? '当前无需再平衡' : '暂无需要调整的资产'}
-                    description={selectedHoldings.length ? '所有资产均处于目标区间内。' : '添加持仓后，可生成买入或卖出建议。'}
-                  />
                 )}
-              </div>
-              <button type="button" className="button secondary" onClick={() => setActiveDetailTab('analysis')}>
-                查看详细建议
-              </button>
-            </Panel>
+              </Panel>
 
-            <Panel title="组合设置">
-              <div className={`portfolio-detail-allocation ${hasAllocationWarning ? 'is-warning' : 'is-ok'}`}>
-                <span>目标比例合计</span>
-                <strong>{pct(allocationTotal)}</strong>
-                {hasAllocationWarning && <em>请调整至 100%</em>}
-              </div>
-              <div className="portfolio-settings-summary">
-                <span>当前模板</span>
-                <strong>{portfolioTypeLabel}</strong>
-              </div>
-              <button type="button" className="button secondary" onClick={() => setSettingsEditorOpen((open) => !open)}>
-                <Settings2 size={16} />
-                {settingsEditorOpen ? '收起设置' : '编辑组合设置'}
-              </button>
-            </Panel>
+              <Panel title="再平衡建议">
+                <div className="portfolio-rebalance-list">
+                  {rebalanceActions.length ? (
+                    rebalanceActions.slice(0, 4).map((item) => (
+                      <div key={item.assetClassId} className={`portfolio-rebalance-item is-${item.action}`}>
+                        <span>{item.assetClassName}</span>
+                        <strong>{item.action === 'buy' ? '建议买入' : '建议卖出'}</strong>
+                        <em>¥{money(Math.abs(item.rebalanceAmount))}</em>
+                      </div>
+                    ))
+                  ) : (
+                    <EmptyHint
+                      title={selectedHoldings.length ? '当前无需再平衡' : '暂无需要调整的资产'}
+                      description={
+                        selectedHoldings.length ? '所有资产均处于目标区间内。' : '添加持仓后，可生成买入或卖出建议。'
+                      }
+                    />
+                  )}
+                </div>
+                <button type="button" className="button secondary" onClick={() => setActiveDetailTab('rebalance')}>
+                  查看详细建议
+                </button>
+              </Panel>
 
-            {settingsEditorOpen && (
-              <PortfolioEditorPanel
-                portfolio={selectedPortfolio}
-                onSavePortfolio={savePortfolio}
-                onDeletePortfolio={deletePortfolio}
-                onCreatePortfolio={createPortfolioFromEditor}
-              />
-            )}
+              <Panel title="组合设置">
+                <div className={`portfolio-detail-allocation ${hasAllocationWarning ? 'is-warning' : 'is-ok'}`}>
+                  <span>目标比例合计</span>
+                  <strong>{pct(allocationTotal)}</strong>
+                  {hasAllocationWarning && <em>请调整至 100%</em>}
+                </div>
+                <div className="portfolio-settings-summary">
+                  <span>当前模板</span>
+                  <strong>{portfolioTypeLabel}</strong>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => setSettingsEditorOpen((open) => !open)}
+                >
+                  <Settings2 size={16} />
+                  {settingsEditorOpen ? '收起设置' : '编辑组合设置'}
+                </button>
+              </Panel>
+
+              {settingsEditorOpen && (
+                <PortfolioEditorPanel
+                  portfolio={selectedPortfolio}
+                  onSavePortfolio={savePortfolio}
+                  onDeletePortfolio={deletePortfolio}
+                  onCreatePortfolio={createPortfolioFromEditor}
+                />
+              )}
             </>
           )}
 
           {activeDetailTab === 'holdings' && (
-          <>
-          <PortfolioMigrationPanel
-            preview={legacyMigrationPreview}
-            onRunMigration={runLegacyMigration}
-            eyebrow="历史持仓迁移"
-            title="全局持仓迁移"
-            actionLabel="迁移持仓"
-          />
-          <PortfolioMigrationPanel
-            preview={groupMigrationPreview}
-            onRunMigration={runGroupMigration}
-            eyebrow="分组持仓迁移"
-            title="分组持仓迁移"
-            actionLabel="迁移分组持仓"
-          />
-          <Panel title="新增持仓">
-            <p className="portfolio-panel-intro">基金可填写代码自动匹配名称；添加基金持仓后会同步加入基估宝主界面基金列表，用于后续实时估值和智能买卖份额换算。</p>
-            <div className="portfolio-form">
-              <select className="select" value={holdingDraft.instrumentType} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, instrumentType: e.target.value }))}>
-                <option value="fund">基金/ETF</option>
-                <option value="cash">现金</option>
-                <option value="manual">手动资产</option>
-              </select>
-              <div className="portfolio-asset-class-buttons" role="group" aria-label="资产类别">
-                {ASSET_CLASSES.map((row) => (
-                  <button
-                    key={row.id}
-                    type="button"
-                    className={holdingDraft.assetClassId === row.id ? 'is-active' : ''}
-                    onClick={() => setHoldingDraft((prev) => ({ ...prev, assetClassId: row.id }))}
+            <>
+              <PortfolioMigrationPanel
+                preview={legacyMigrationPreview}
+                onRunMigration={runLegacyMigration}
+                eyebrow="历史持仓迁移"
+                title="全局持仓迁移"
+                actionLabel="迁移持仓"
+              />
+              <PortfolioMigrationPanel
+                preview={groupMigrationPreview}
+                onRunMigration={runGroupMigration}
+                eyebrow="分组持仓迁移"
+                title="分组持仓迁移"
+                actionLabel="迁移分组持仓"
+              />
+              <Panel title="新增持仓">
+                <p className="portfolio-panel-intro">
+                  基金可填写代码自动匹配名称；添加基金持仓后会同步加入基估宝主界面基金列表，用于后续实时估值和智能买卖份额换算。
+                </p>
+                <div className="portfolio-form">
+                  <select
+                    className="select"
+                    value={holdingDraft.instrumentType}
+                    onChange={(e) => setHoldingDraft((prev) => ({ ...prev, instrumentType: e.target.value }))}
                   >
-                    {row.name}
-                  </button>
-                ))}
-              </div>
-              <div className="portfolio-code-name-field">
-                <div className="portfolio-code-name-row">
-                  <input className="input" value={holdingDraft.fundCode} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, fundCode: e.target.value }))} placeholder="代码" />
-                  <input className="input" value={holdingDraft.fundName} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, fundName: e.target.value }))} placeholder="名称" />
-                </div>
-                {holdingDraft.instrumentType !== 'cash' && (fundSuggestions.length > 0 || isHoldingFundSearching) && (
-                  <div className="portfolio-fund-suggestions">
-                    {isHoldingFundSearching && <span className="muted">搜索中...</span>}
-                    {fundSuggestions.map((fund) => (
-                      <button key={fund.code} type="button" onClick={() => selectHoldingFund(fund)}>
-                        <strong>{fund.code}</strong>
-                        <span>{fund.name}</span>
+                    <option value="fund">基金/ETF</option>
+                    <option value="cash">现金</option>
+                    <option value="manual">手动资产</option>
+                  </select>
+                  <div className="portfolio-asset-class-buttons" role="group" aria-label="资产类别">
+                    {ASSET_CLASSES.map((row) => (
+                      <button
+                        key={row.id}
+                        type="button"
+                        className={holdingDraft.assetClassId === row.id ? 'is-active' : ''}
+                        onClick={() => setHoldingDraft((prev) => ({ ...prev, assetClassId: row.id }))}
+                      >
+                        {row.name}
                       </button>
                     ))}
                   </div>
-                )}
-              </div>
-              <div className="portfolio-mode-toggle" role="group" aria-label="持仓录入模式">
-                <button type="button" className={holdingDraft.valueMode === 'amount' ? 'is-active' : ''} onClick={() => setHoldingDraft((prev) => ({ ...prev, valueMode: 'amount' }))}>按市值录入</button>
-                <button type="button" className={holdingDraft.valueMode === 'share' ? 'is-active' : ''} onClick={() => setHoldingDraft((prev) => ({ ...prev, valueMode: 'share' }))}>按份额录入</button>
-              </div>
-              <input className="input" value={holdingDraft.costAmount} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, costAmount: e.target.value }))} placeholder="本金/成本金额，例如 39,202.20" />
-              {holdingDraft.valueMode === 'amount' ? (
-                <input className="input" value={holdingDraft.manualValue} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, manualValue: e.target.value }))} placeholder="当前市值" />
-              ) : (
-                <>
-                  <input className="input" value={holdingDraft.share} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, share: e.target.value }))} placeholder="份额" />
-                  <input className="input" value={holdingDraft.estimatedNav} onChange={(e) => setHoldingDraft((prev) => ({ ...prev, estimatedNav: e.target.value }))} placeholder="估算净值" />
-                </>
-              )}
-              {holdingDraftErrors.length > 0 && (
-                <ul className="portfolio-import-errors" role="alert">
-                  {holdingDraftErrors.map((error) => <li key={error}>{error}</li>)}
-                </ul>
-              )}
-              <button type="button" className="button" onClick={addHolding}><Plus size={16} />添加持仓</button>
-            </div>
-          </Panel>
-          </>
+                  <div className="portfolio-code-name-field">
+                    <div className="portfolio-code-name-row">
+                      <input
+                        className="input"
+                        value={holdingDraft.fundCode}
+                        onChange={(e) => setHoldingDraft((prev) => ({ ...prev, fundCode: e.target.value }))}
+                        placeholder="代码"
+                      />
+                      <input
+                        className="input"
+                        value={holdingDraft.fundName}
+                        onChange={(e) => setHoldingDraft((prev) => ({ ...prev, fundName: e.target.value }))}
+                        placeholder="名称"
+                      />
+                    </div>
+                    {holdingDraft.instrumentType !== 'cash' &&
+                      (fundSuggestions.length > 0 || isHoldingFundSearching) && (
+                        <div className="portfolio-fund-suggestions">
+                          {isHoldingFundSearching && <span className="muted">搜索中...</span>}
+                          {fundSuggestions.map((fund) => (
+                            <button key={fund.code} type="button" onClick={() => selectHoldingFund(fund)}>
+                              <strong>{fund.code}</strong>
+                              <span>{fund.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                  </div>
+                  <div className="portfolio-mode-toggle" role="group" aria-label="持仓录入模式">
+                    <button
+                      type="button"
+                      className={holdingDraft.valueMode === 'amount' ? 'is-active' : ''}
+                      onClick={() => setHoldingDraft((prev) => ({ ...prev, valueMode: 'amount' }))}
+                    >
+                      按市值录入
+                    </button>
+                    <button
+                      type="button"
+                      className={holdingDraft.valueMode === 'share' ? 'is-active' : ''}
+                      onClick={() => setHoldingDraft((prev) => ({ ...prev, valueMode: 'share' }))}
+                    >
+                      按份额录入
+                    </button>
+                  </div>
+                  <input
+                    className="input"
+                    value={holdingDraft.costAmount}
+                    onChange={(e) => setHoldingDraft((prev) => ({ ...prev, costAmount: e.target.value }))}
+                    placeholder="本金/成本金额，例如 39,202.20"
+                  />
+                  {holdingDraft.valueMode === 'amount' ? (
+                    <input
+                      className="input"
+                      value={holdingDraft.manualValue}
+                      onChange={(e) => setHoldingDraft((prev) => ({ ...prev, manualValue: e.target.value }))}
+                      placeholder="当前市值"
+                    />
+                  ) : (
+                    <>
+                      <input
+                        className="input"
+                        value={holdingDraft.share}
+                        onChange={(e) => setHoldingDraft((prev) => ({ ...prev, share: e.target.value }))}
+                        placeholder="份额"
+                      />
+                      <input
+                        className="input"
+                        value={holdingDraft.estimatedNav}
+                        onChange={(e) => setHoldingDraft((prev) => ({ ...prev, estimatedNav: e.target.value }))}
+                        placeholder="估算净值"
+                      />
+                    </>
+                  )}
+                  {holdingDraftErrors.length > 0 && (
+                    <ul className="portfolio-import-errors" role="alert">
+                      {holdingDraftErrors.map((error) => (
+                        <li key={error}>{error}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <button type="button" className="button" onClick={addHolding}>
+                    <Plus size={16} />
+                    添加持仓
+                  </button>
+                </div>
+              </Panel>
+            </>
           )}
 
           {activeDetailTab === 'transactions' && (
-          <Panel title="记录交易">
-            <p className="portfolio-panel-intro">交易会同步更新持仓与本金记录，适合记录买入、卖出、现金流和分红。</p>
-            <div className="portfolio-form">
-              <select className="select" value={transactionDraft.holdingId} onChange={(e) => setTransactionDraft((prev) => ({ ...prev, holdingId: e.target.value }))}>
-                <option value="">选择持仓</option>
-                {selectedHoldings.map((holding) => <option key={holding.id} value={holding.id}>{holding.fundName}</option>)}
-              </select>
-              <select className="select" value={transactionDraft.type} onChange={(e) => setTransactionDraft((prev) => ({ ...prev, type: e.target.value }))}>
-                <option value="buy">买入</option>
-                <option value="sell">卖出</option>
-                <option value="cash_in">现金转入</option>
-                <option value="cash_out">现金转出</option>
-                <option value="fee">手续费</option>
-                <option value="dividend_cash">现金分红</option>
-              </select>
-              <input className="input" type="date" value={transactionDraft.date} onChange={(e) => setTransactionDraft((prev) => ({ ...prev, date: e.target.value }))} />
-              <input className="input" value={transactionDraft.amount} onChange={(e) => setTransactionDraft((prev) => ({ ...prev, amount: e.target.value }))} placeholder="金额" />
-              <input className="input" value={transactionDraft.share} onChange={(e) => setTransactionDraft((prev) => ({ ...prev, share: e.target.value }))} placeholder="份额" />
-              <input className="input" value={transactionDraft.price} onChange={(e) => setTransactionDraft((prev) => ({ ...prev, price: e.target.value }))} placeholder="价格" />
-              <input className="input" value={transactionDraft.fee} onChange={(e) => setTransactionDraft((prev) => ({ ...prev, fee: e.target.value }))} placeholder="手续费" />
-              <button type="button" className="button" onClick={recordTransaction}><Save size={16} />保存交易</button>
-            </div>
-          </Panel>
+            <Panel title="记录交易">
+              <p className="portfolio-panel-intro">交易会同步更新持仓与本金记录，适合记录买入、卖出、现金流和分红。</p>
+              <div className="portfolio-form">
+                <select
+                  className="select"
+                  value={transactionDraft.holdingId}
+                  onChange={(e) => setTransactionDraft((prev) => ({ ...prev, holdingId: e.target.value }))}
+                >
+                  <option value="">选择持仓</option>
+                  {selectedHoldings.map((holding) => (
+                    <option key={holding.id} value={holding.id}>
+                      {holding.fundName}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="select"
+                  value={transactionDraft.type}
+                  onChange={(e) => setTransactionDraft((prev) => ({ ...prev, type: e.target.value }))}
+                >
+                  <option value="buy">买入</option>
+                  <option value="sell">卖出</option>
+                  <option value="cash_in">现金转入</option>
+                  <option value="cash_out">现金转出</option>
+                  <option value="fee">手续费</option>
+                  <option value="dividend_cash">现金分红</option>
+                  <option value="dividend_reinvest">红利再投</option>
+                  <option value="convert">基金转换</option>
+                  <option value="adjustment">手动调整</option>
+                </select>
+                <select
+                  className="select"
+                  value={transactionDraft.status}
+                  onChange={(e) => setTransactionDraft((prev) => ({ ...prev, status: e.target.value }))}
+                >
+                  <option value="confirmed">已确认成交</option>
+                  <option value="planned">仅保存计划</option>
+                </select>
+                {transactionDraft.type === 'convert' && (
+                  <select
+                    className="select"
+                    value={transactionDraft.targetHoldingId}
+                    onChange={(e) => setTransactionDraft((prev) => ({ ...prev, targetHoldingId: e.target.value }))}
+                  >
+                    <option value="">选择转入持仓</option>
+                    {selectedHoldings
+                      .filter((holding) => holding.id !== transactionDraft.holdingId)
+                      .map((holding) => (
+                        <option key={holding.id} value={holding.id}>
+                          {holding.fundName}
+                        </option>
+                      ))}
+                  </select>
+                )}
+                <input
+                  className="input"
+                  type="date"
+                  value={transactionDraft.date}
+                  onChange={(e) => setTransactionDraft((prev) => ({ ...prev, date: e.target.value }))}
+                />
+                <input
+                  className="input"
+                  value={transactionDraft.amount}
+                  onChange={(e) => setTransactionDraft((prev) => ({ ...prev, amount: e.target.value }))}
+                  placeholder="金额"
+                />
+                <input
+                  className="input"
+                  value={transactionDraft.share}
+                  onChange={(e) => setTransactionDraft((prev) => ({ ...prev, share: e.target.value }))}
+                  placeholder="份额"
+                />
+                <input
+                  className="input"
+                  value={transactionDraft.price}
+                  onChange={(e) => setTransactionDraft((prev) => ({ ...prev, price: e.target.value }))}
+                  placeholder="价格"
+                />
+                {transactionDraft.type === 'convert' && (
+                  <>
+                    <input
+                      className="input"
+                      value={transactionDraft.targetShare}
+                      onChange={(e) => setTransactionDraft((prev) => ({ ...prev, targetShare: e.target.value }))}
+                      placeholder="转入份额"
+                    />
+                    <input
+                      className="input"
+                      value={transactionDraft.targetPrice}
+                      onChange={(e) => setTransactionDraft((prev) => ({ ...prev, targetPrice: e.target.value }))}
+                      placeholder="转入净值"
+                    />
+                  </>
+                )}
+                <input
+                  className="input"
+                  value={transactionDraft.fee}
+                  onChange={(e) => setTransactionDraft((prev) => ({ ...prev, fee: e.target.value }))}
+                  placeholder="手续费"
+                />
+                <input
+                  className="input"
+                  value={transactionDraft.note}
+                  onChange={(e) => setTransactionDraft((prev) => ({ ...prev, note: e.target.value }))}
+                  placeholder="备注"
+                />
+                <button type="button" className="button" onClick={recordTransaction}>
+                  <Save size={16} />
+                  {editingTransactionId ? '保存修改并重建' : '保存交易'}
+                </button>
+                {editingTransactionId && (
+                  <button type="button" className="button ghost" onClick={resetTransactionDraft}>
+                    取消编辑
+                  </button>
+                )}
+              </div>
+            </Panel>
           )}
 
-          {activeDetailTab === 'analysis' && (
+          {activeDetailTab === 'data' && (
             <Panel title="导出备份">
               <div className="portfolio-form">
-                <button type="button" className="button secondary" onClick={exportJson}>生成 JSON</button>
+                <button type="button" className="button secondary" onClick={exportJson}>
+                  生成 JSON
+                </button>
                 <span className="muted">生成后会填入左侧文本框，可复制保存或重新导入。</span>
                 <PortfolioCsvImportPanel
                   csvText={csvText}

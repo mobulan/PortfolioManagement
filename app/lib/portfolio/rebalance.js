@@ -3,6 +3,11 @@ import { normalizePortfolioFundCandidate } from './holdingForm.js';
 
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const round6 = (value) => Math.round((Number(value) || 0) * 1000000) / 1000000;
+const numberOr = (value, fallback = 0) => {
+  if (value === '' || value === null || value === undefined) return Number(fallback) || 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number(fallback) || 0;
+};
 
 const holdingValue = (holding = {}) => {
   if (holding.manualValue !== null && holding.manualValue !== undefined) return Number(holding.manualValue) || 0;
@@ -11,12 +16,12 @@ const holdingValue = (holding = {}) => {
   return (Number(holding.share) || 0) * nav;
 };
 
-const holdingPrice = (holding = {}) => (
-  Number(holding.estimatedNav ?? holding.currentNav ?? holding.costPrice ?? 0) || 0
-);
+const holdingPrice = (holding = {}) =>
+  Number(holding.estimatedNav ?? holding.currentNav ?? holding.costPrice ?? 0) || 0;
 
 const holdingTradeValue = (holding = {}, price = holdingPrice(holding)) => {
-  if (holding.instrumentType === 'cash') return Number(holding.manualValue ?? holding.currentValue ?? holding.costAmount ?? 0) || 0;
+  if (holding.instrumentType === 'cash')
+    return Number(holding.manualValue ?? holding.currentValue ?? holding.costAmount ?? 0) || 0;
   if (holding.manualValue !== null && holding.manualValue !== undefined) return Number(holding.manualValue) || 0;
   if (holding.currentValue !== null && holding.currentValue !== undefined) return Number(holding.currentValue) || 0;
   return (Number(holding.share) || 0) * (Number(price) || 0);
@@ -38,11 +43,9 @@ export function resolveHoldingTradePrice(holding = {}, fundEntry = null) {
   }
   const raw = fundEntry?.raw || {};
   const candidate = fundEntry?.candidate || null;
-  const hasRawEstimated = (
-    raw.gsz !== null && raw.gsz !== undefined && raw.gsz !== ''
-  ) || (
-    raw.estimatedNav !== null && raw.estimatedNav !== undefined && raw.estimatedNav !== ''
-  );
+  const hasRawEstimated =
+    (raw.gsz !== null && raw.gsz !== undefined && raw.gsz !== '') ||
+    (raw.estimatedNav !== null && raw.estimatedNav !== undefined && raw.estimatedNav !== '');
   const estimated = Number(hasRawEstimated ? (raw.gsz ?? raw.estimatedNav) : NaN);
   if (Number.isFinite(estimated) && estimated > 0) {
     return { price: round6(estimated), source: 'estimated', time: raw.gztime || '' };
@@ -62,29 +65,27 @@ export function resolveHoldingTradePrice(holding = {}, fundEntry = null) {
   return { price: 0, source: 'missing', time: '' };
 }
 
-const selectRebalanceHolding = (holdings = [], portfolioId = '', assetClassId = '') => (
+const selectRebalanceHolding = (holdings = [], portfolioId = '', assetClassId = '') =>
   (Array.isArray(holdings) ? holdings : [])
-    .filter((holding) => (
-      (!portfolioId || holding.portfolioId === portfolioId)
-      && holding.assetClassId === assetClassId
-      && !holding.archived
-    ))
-    .sort((a, b) => holdingValue(b) - holdingValue(a))[0] || null
-);
+    .filter(
+      (holding) =>
+        (!portfolioId || holding.portfolioId === portfolioId) &&
+        holding.assetClassId === assetClassId &&
+        !holding.archived
+    )
+    .sort((a, b) => holdingValue(b) - holdingValue(a))[0] || null;
 
 export function calculateRebalancePlan(portfolio, holdings = [], options = {}) {
   const summary = calculatePortfolioSummary(portfolio, holdings);
   const totalValue = summary.totalValue;
   const defaultThreshold = portfolio?.rebalanceConfig?.defaultThreshold ?? 0.05;
   const items = summary.assetClasses.map((row) => {
-    const threshold = (portfolio?.targetAllocations || []).find((a) => a.assetClassId === row.assetClassId)?.rebalanceThreshold ?? defaultThreshold;
+    const threshold =
+      (portfolio?.targetAllocations || []).find((a) => a.assetClassId === row.assetClassId)?.rebalanceThreshold ??
+      defaultThreshold;
     const targetAmount = totalValue * row.targetRatio;
     const rebalanceAmount = targetAmount - row.currentValue;
-    const action = Math.abs(row.drift) <= threshold
-      ? 'hold'
-      : rebalanceAmount > 0
-        ? 'buy'
-        : 'sell';
+    const action = totalValue <= 0 || Math.abs(row.drift) <= threshold ? 'hold' : rebalanceAmount > 0 ? 'buy' : 'sell';
     return {
       assetClassId: row.assetClassId,
       assetClassName: row.assetClassName,
@@ -95,7 +96,7 @@ export function calculateRebalancePlan(portfolio, holdings = [], options = {}) {
       threshold,
       targetAmount: roundMoney(targetAmount),
       rebalanceAmount: roundMoney(rebalanceAmount),
-      action,
+      action
     };
   });
   return {
@@ -104,7 +105,7 @@ export function calculateRebalancePlan(portfolio, holdings = [], options = {}) {
     theta: summary.theta,
     thresholdAmount: roundMoney(totalValue * summary.theta),
     mode: options.mode || portfolio?.rebalanceConfig?.mode || 'threshold',
-    items,
+    items
   };
 }
 
@@ -117,8 +118,8 @@ export function calculateProportionalCashPlan(portfolio, cashflow = 0) {
       assetClassId: allocation.assetClassId,
       assetClassName: allocation.assetClassName,
       amount: roundMoney(amount * allocation.targetRatio),
-      action: amount >= 0 ? 'buy' : 'sell',
-    })),
+      action: amount >= 0 ? 'buy' : 'sell'
+    }))
   };
 }
 
@@ -130,16 +131,16 @@ export function calculateSmartCashPlan(portfolio, holdings = [], cashflow = 0) {
     return {
       ...calculateProportionalCashPlan(portfolio, amount),
       theta: rebalance.theta,
-      thresholdAmount: rebalance.thresholdAmount,
+      thresholdAmount: rebalance.thresholdAmount
     };
   }
 
   const futureTotal = rebalance.totalValue + amount;
   const gaps = rebalance.items.map((item) => ({
     ...item,
-    futureGap: roundMoney((futureTotal * item.targetRatio) - item.currentValue),
+    futureGap: roundMoney(futureTotal * item.targetRatio - item.currentValue)
   }));
-  const candidates = gaps.filter((item) => amount >= 0 ? item.futureGap > 0 : item.futureGap < 0);
+  const candidates = gaps.filter((item) => (amount >= 0 ? item.futureGap > 0 : item.futureGap < 0));
   const totalGap = candidates.reduce((sum, item) => sum + Math.abs(item.futureGap), 0);
   const action = amount >= 0 ? 'buy' : 'sell';
   const items = [];
@@ -149,16 +150,14 @@ export function calculateSmartCashPlan(portfolio, holdings = [], cashflow = 0) {
       const surplus = absAmount - totalGap;
       rebalance.items.forEach((item) => {
         const gap = gaps.find((gapItem) => gapItem.assetClassId === item.assetClassId)?.futureGap || 0;
-        const gapAmount = amount >= 0
-          ? Math.max(0, gap)
-          : Math.abs(Math.min(0, gap));
-        const allocated = gapAmount + (surplus * item.targetRatio);
+        const gapAmount = amount >= 0 ? Math.max(0, gap) : Math.abs(Math.min(0, gap));
+        const allocated = gapAmount + surplus * item.targetRatio;
         if (allocated <= 0) return;
         items.push({
           assetClassId: item.assetClassId,
           assetClassName: item.assetClassName,
           amount: roundMoney(allocated),
-          action,
+          action
         });
       });
     } else {
@@ -169,7 +168,7 @@ export function calculateSmartCashPlan(portfolio, holdings = [], cashflow = 0) {
           assetClassId: item.assetClassId,
           assetClassName: item.assetClassName,
           amount: roundMoney(allocated),
-          action,
+          action
         });
       });
     }
@@ -181,7 +180,7 @@ export function calculateSmartCashPlan(portfolio, holdings = [], cashflow = 0) {
         assetClassId: item.assetClassId,
         assetClassName: item.assetClassName,
         amount: roundMoney(allocated),
-        action,
+        action
       });
     });
   }
@@ -191,7 +190,7 @@ export function calculateSmartCashPlan(portfolio, holdings = [], cashflow = 0) {
     mode: amount >= 0 ? 'smart_fill' : 'smart_trim',
     theta: rebalance.theta,
     thresholdAmount: rebalance.thresholdAmount,
-    items,
+    items
   };
 }
 
@@ -199,7 +198,7 @@ export function createRebalanceTransactionDrafts({
   portfolio,
   holdings = [],
   plan,
-  date = new Date().toISOString().slice(0, 10),
+  date = new Date().toISOString().slice(0, 10)
 } = {}) {
   const rebalancePlan = plan || calculateRebalancePlan(portfolio, holdings);
   const portfolioId = portfolio?.id || rebalancePlan?.portfolioId || '';
@@ -211,9 +210,7 @@ export function createRebalanceTransactionDrafts({
       const amount = Math.abs(Number(item.rebalanceAmount) || 0);
       if (amount <= 0) return null;
       const price = holdingPrice(holding);
-      const type = holding.instrumentType === 'cash'
-        ? (item.action === 'buy' ? 'cash_in' : 'cash_out')
-        : item.action;
+      const type = holding.instrumentType === 'cash' ? (item.action === 'buy' ? 'cash_in' : 'cash_out') : item.action;
       return {
         id: `rebalance_${portfolioId}_${item.assetClassId}_${date}`,
         portfolioId,
@@ -227,7 +224,7 @@ export function createRebalanceTransactionDrafts({
         fee: 0,
         date,
         source: 'rebalance',
-        note: `${item.assetClassName || item.assetClassId} ${item.action} ${roundMoney(amount)}`,
+        note: `${item.assetClassName || item.assetClassId} ${item.action} ${roundMoney(amount)}`
       };
     })
     .filter(Boolean);
@@ -238,17 +235,14 @@ export function createSmartTradeDrafts({
   holdings = [],
   funds = [],
   plan,
-  date = new Date().toISOString().slice(0, 10),
+  date = new Date().toISOString().slice(0, 10)
 } = {}) {
   const portfolioId = portfolio?.id || '';
   const cashPlan = plan || calculateSmartCashPlan(portfolio, holdings, 0);
   const fundMap = buildFundCandidateMap(funds);
-  const activeHoldings = (Array.isArray(holdings) ? holdings : [])
-    .filter((holding) => (
-      (!portfolioId || holding.portfolioId === portfolioId)
-      && !holding.archived
-      && holding.enabled !== false
-    ));
+  const activeHoldings = (Array.isArray(holdings) ? holdings : []).filter(
+    (holding) => (!portfolioId || holding.portfolioId === portfolioId) && !holding.archived && holding.enabled !== false
+  );
   const blockingWarnings = [];
   const rows = [];
 
@@ -263,7 +257,7 @@ export function createSmartTradeDrafts({
     if (totalSellRequest > totalAvailableValue + 0.01) {
       blockingWarnings.push({
         code: 'sell_amount_exceeds_available_value',
-        message: 'Sell amount exceeds available portfolio value.',
+        message: 'Sell amount exceeds available portfolio value.'
       });
     }
   }
@@ -279,7 +273,7 @@ export function createSmartTradeDrafts({
         return {
           holding,
           priceInfo,
-          currentValue: holdingTradeValue(holding, priceInfo.price),
+          currentValue: holdingTradeValue(holding, priceInfo.price)
         };
       })
       .filter((entry) => entry.holding);
@@ -287,15 +281,16 @@ export function createSmartTradeDrafts({
       blockingWarnings.push({
         code: 'asset_class_has_no_holding',
         assetClassId: item.assetClassId,
-        message: `No holding exists for ${item.assetClassName || item.assetClassId}.`,
+        message: `No holding exists for ${item.assetClassName || item.assetClassId}.`
       });
       return;
     }
 
     let remaining = requestedAmount;
-    const ordered = action === 'sell'
-      ? [...classHoldings].sort((a, b) => b.currentValue - a.currentValue)
-      : [...classHoldings].sort((a, b) => a.currentValue - b.currentValue);
+    const ordered =
+      action === 'sell'
+        ? [...classHoldings].sort((a, b) => b.currentValue - a.currentValue)
+        : [...classHoldings].sort((a, b) => a.currentValue - b.currentValue);
 
     ordered.forEach((entry) => {
       if (remaining <= 0) return;
@@ -308,17 +303,18 @@ export function createSmartTradeDrafts({
       const canCalculateShare = !isCash && price > 0;
       const share = canCalculateShare ? round6(amount / price) : 0;
       const currentShare = Number(holding.share) || 0;
-      const projectedShare = action === 'sell'
-        ? round6(Math.max(0, currentShare - share))
-        : round6(currentShare + share);
-      const projectedValue = action === 'sell'
-        ? roundMoney(Math.max(0, entry.currentValue - amount))
-        : roundMoney(entry.currentValue + amount);
-      const warning = priceInfo.source === 'missing' && !isCash
-        ? 'missing_price'
-        : action === 'sell' && amount < remaining
-          ? 'sell_clipped_to_available_value'
-          : '';
+      const projectedShare =
+        action === 'sell' ? round6(Math.max(0, currentShare - share)) : round6(currentShare + share);
+      const projectedValue =
+        action === 'sell'
+          ? roundMoney(Math.max(0, entry.currentValue - amount))
+          : roundMoney(entry.currentValue + amount);
+      const warning =
+        priceInfo.source === 'missing' && !isCash
+          ? 'missing_price'
+          : action === 'sell' && amount < remaining
+            ? 'sell_clipped_to_available_value'
+            : '';
 
       rows.push({
         id: `smart_trade_${portfolioId}_${holding.id}_${action}_${date}`,
@@ -342,7 +338,7 @@ export function createSmartTradeDrafts({
         fee: 0,
         date,
         source: 'smart_trade',
-        note: `smart_trade:${cashPlan.mode || 'unknown'}`,
+        note: `smart_trade:${cashPlan.mode || 'unknown'}`
       });
       remaining = roundMoney(remaining - amount);
     });
@@ -352,7 +348,7 @@ export function createSmartTradeDrafts({
         code: action === 'sell' ? 'asset_class_sell_amount_exceeds_available_value' : 'asset_class_unallocated_amount',
         assetClassId: item.assetClassId,
         amount: roundMoney(remaining),
-        message: `${item.assetClassName || item.assetClassId} has ${roundMoney(remaining)} unallocated.`,
+        message: `${item.assetClassName || item.assetClassId} has ${roundMoney(remaining)} unallocated.`
       });
     }
   });
@@ -362,9 +358,29 @@ export function createSmartTradeDrafts({
     totalCashflow: roundMoney(cashPlan?.totalCashflow || 0),
     rows,
     blockingWarnings,
-    warnings: rows.filter((row) => row.warning).map((row) => ({
-      code: row.warning,
-      holdingId: row.holdingId,
-    })),
+    warnings: rows
+      .filter((row) => row.warning)
+      .map((row) => ({
+        code: row.warning,
+        holdingId: row.holdingId
+      }))
   };
+}
+
+export function applySmartTradeActualFills(rows = [], fills = {}) {
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const fill = fills?.[row.id] || {};
+    const amount = numberOr(fill.amount, row.amount);
+    const price = numberOr(fill.price, row.price);
+    const enteredShare = numberOr(fill.share, row.share);
+    return {
+      ...row,
+      amount: Math.max(0, amount),
+      price: Math.max(0, price),
+      share: Math.max(0, enteredShare || (price > 0 ? amount / price : 0)),
+      fee: Math.max(0, numberOr(fill.fee, row.fee)),
+      note: String(fill.note ?? row.note ?? '').trim(),
+      actualFill: Boolean(Object.keys(fill).length)
+    };
+  });
 }

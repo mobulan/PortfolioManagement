@@ -37,7 +37,7 @@ export function calculateHoldingMetrics(input) {
     totalPrincipal,
     totalProfit,
     totalReturnRate,
-    dailyEstimatedProfit,
+    dailyEstimatedProfit
   };
 }
 
@@ -59,7 +59,7 @@ export function summarizeAssetClasses(portfolio, holdings = []) {
       currentValue: 0,
       principal: 0,
       dailyEstimatedProfit: 0,
-      holdingCount: 0,
+      holdingCount: 0
     };
     prev.currentValue += holding.currentValue;
     prev.principal += holding.totalPrincipal;
@@ -75,7 +75,7 @@ export function summarizeAssetClasses(portfolio, holdings = []) {
         currentValue: 0,
         principal: 0,
         dailyEstimatedProfit: 0,
-        holdingCount: 0,
+        holdingCount: 0
       });
     }
   }
@@ -89,7 +89,7 @@ export function summarizeAssetClasses(portfolio, holdings = []) {
       targetRatio,
       threshold,
       currentRatio,
-      drift: currentRatio - targetRatio,
+      drift: currentRatio - targetRatio
     };
   });
 }
@@ -141,7 +141,7 @@ export function createAssetDriftDisplay(row = {}) {
     targetPosition,
     currentPosition,
     rangeStart,
-    rangeEnd,
+    rangeEnd
   };
 }
 
@@ -152,7 +152,7 @@ export function calculatePortfolioSummary(portfolio, holdings = []) {
   const totalProfit = totalValue - totalPrincipal;
   const dailyEstimatedProfit = activeHoldings.reduce((sum, holding) => sum + holding.dailyEstimatedProfit, 0);
   const assetClasses = summarizeAssetClasses(portfolio, activeHoldings);
-  const theta = assetClasses.reduce((sum, row) => sum + Math.abs(row.drift), 0);
+  const theta = totalValue > 0 ? assetClasses.reduce((sum, row) => sum + Math.abs(row.drift), 0) : 0;
   return {
     portfolioId: portfolio?.id || '',
     totalValue,
@@ -164,13 +164,13 @@ export function calculatePortfolioSummary(portfolio, holdings = []) {
     holdingCount: activeHoldings.length,
     assetClassCount: assetClasses.filter((row) => row.currentValue > 0).length,
     theta,
-    assetClasses,
+    assetClasses
   };
 }
 
-export function aggregateDashboard(portfolios = [], holdings = []) {
+export function aggregateDashboard(portfolios = [], holdings = [], { includeArchived = false } = {}) {
   const summaries = (Array.isArray(portfolios) ? portfolios : [])
-    .filter((portfolio) => !portfolio.archived)
+    .filter((portfolio) => includeArchived || !portfolio.archived)
     .map((portfolio) => calculatePortfolioSummary(portfolio, holdings));
   const totalValue = summaries.reduce((sum, row) => sum + row.totalValue, 0);
   const totalPrincipal = summaries.reduce((sum, row) => sum + row.totalPrincipal, 0);
@@ -183,6 +183,6 @@ export function aggregateDashboard(portfolios = [], holdings = []) {
     dailyEstimatedProfit,
     dailyEstimatedReturnRate: totalValue === 0 ? 0 : dailyEstimatedProfit / totalValue,
     portfolioCount: summaries.length,
-    summaries,
+    summaries
   };
 }

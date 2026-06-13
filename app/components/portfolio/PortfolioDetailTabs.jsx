@@ -8,7 +8,7 @@ const DEFAULT_TABS = [
   { id: 'transactions', label: '交易' },
   { id: 'rebalance', label: '再平衡' },
   { id: 'history', label: '历史' },
-  { id: 'backtest', label: '回测' },
+  { id: 'backtest', label: '回测' }
 ];
 
 const formatPercent = (value) => `${((Number(value) || 0) * 100).toFixed(2)}%`;
@@ -19,7 +19,7 @@ function normalizeError(error, index) {
   if (typeof error === 'object') {
     return {
       id: error.id || error.code || `error-${index}`,
-      message: error.message || error.label || String(error.code || '校验失败'),
+      message: error.message || error.label || String(error.code || '校验失败')
     };
   }
   return { id: `error-${index}`, message: String(error) };
@@ -30,7 +30,7 @@ export default function PortfolioDetailTabs({
   onChange,
   tabs = DEFAULT_TABS,
   allocationTotal = 0,
-  errors = [],
+  errors = []
 }) {
   const normalizedTabs = useMemo(() => {
     const sourceTabs = Array.isArray(tabs) && tabs.length ? tabs : DEFAULT_TABS;
@@ -39,7 +39,7 @@ export default function PortfolioDetailTabs({
 
   const normalizedErrors = useMemo(
     () => (Array.isArray(errors) ? errors : [errors]).map(normalizeError).filter(Boolean),
-    [errors],
+    [errors]
   );
 
   const total = Number(allocationTotal) || 0;

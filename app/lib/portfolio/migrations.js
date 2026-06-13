@@ -14,11 +14,11 @@ export function previewLegacyHoldingsMigration({
   funds = [],
   holdings = {},
   existingPortfolioHoldings = [],
-  portfolioId = DEFAULT_MIGRATION_PORTFOLIO_ID,
+  portfolioId = DEFAULT_MIGRATION_PORTFOLIO_ID
 } = {}) {
-  const fundByCode = new Map((Array.isArray(funds) ? funds : [])
-    .map((fund) => [normalizeFundCode(fund?.code), fund])
-    .filter(([code]) => code));
+  const fundByCode = new Map(
+    (Array.isArray(funds) ? funds : []).map((fund) => [normalizeFundCode(fund?.code), fund]).filter(([code]) => code)
+  );
   const existingFundCodes = new Set();
   const existingPortfolioFundCodes = new Set();
 
@@ -44,25 +44,27 @@ export function previewLegacyHoldingsMigration({
     const fund = fundByCode.get(fundCode);
     const share = Number(holding?.share) || 0;
     const cost = Number(holding?.cost) || 0;
-    previewHoldings.push(normalizePortfolioHolding({
-      id: createMigrationHoldingId(portfolioId, fundCode),
-      portfolioId,
-      assetClassId: 'equity',
-      instrumentType: 'fund',
-      fundCode,
-      fundName: fund?.name || fundCode,
-      share,
-      costPrice: cost,
-      costAmount: share * cost,
-      currentNav: Number(fund?.dwjz) || null,
-      estimatedNav: Number(fund?.gsz) || Number(fund?.dwjz) || null,
-    }));
+    previewHoldings.push(
+      normalizePortfolioHolding({
+        id: createMigrationHoldingId(portfolioId, fundCode),
+        portfolioId,
+        assetClassId: 'equity',
+        instrumentType: 'fund',
+        fundCode,
+        fundName: fund?.name || fundCode,
+        share,
+        costPrice: cost,
+        costAmount: share * cost,
+        currentNav: Number(fund?.dwjz) || null,
+        estimatedNav: Number(fund?.gsz) || Number(fund?.dwjz) || null
+      })
+    );
   });
 
   return {
     migratableCount: previewHoldings.length,
     skippedCount,
-    holdings: previewHoldings,
+    holdings: previewHoldings
   };
 }
 
@@ -83,11 +85,11 @@ export function previewGroupHoldingsMigration({
   groupHoldings = {},
   groupId = '',
   existingPortfolioHoldings = [],
-  portfolioId = DEFAULT_MIGRATION_PORTFOLIO_ID,
+  portfolioId = DEFAULT_MIGRATION_PORTFOLIO_ID
 } = {}) {
-  const fundByCode = new Map((Array.isArray(funds) ? funds : [])
-    .map((fund) => [normalizeFundCode(fund?.code), fund])
-    .filter(([code]) => code));
+  const fundByCode = new Map(
+    (Array.isArray(funds) ? funds : []).map((fund) => [normalizeFundCode(fund?.code), fund]).filter(([code]) => code)
+  );
   const duplicateFundCodes = new Set();
 
   (Array.isArray(existingPortfolioHoldings) ? existingPortfolioHoldings : []).forEach((holding) => {
@@ -104,7 +106,7 @@ export function previewGroupHoldingsMigration({
       const fundCode = normalizeFundCode(rawCode);
       const skipBase = {
         groupId: currentGroupId,
-        fundCode,
+        fundCode
       };
 
       if (!fundCode) {
@@ -126,19 +128,21 @@ export function previewGroupHoldingsMigration({
       const fund = fundByCode.get(fundCode);
       const share = Number(holding?.share) || 0;
       const cost = Number(holding?.cost) || 0;
-      previewHoldings.push(normalizePortfolioHolding({
-        id: createMigrationHoldingId(portfolioId, fundCode),
-        portfolioId,
-        assetClassId: 'equity',
-        instrumentType: 'fund',
-        fundCode,
-        fundName: fund?.name || fundCode,
-        share,
-        costPrice: cost,
-        costAmount: share * cost,
-        currentNav: Number(fund?.dwjz) || null,
-        estimatedNav: Number(fund?.gsz) || Number(fund?.dwjz) || null,
-      }));
+      previewHoldings.push(
+        normalizePortfolioHolding({
+          id: createMigrationHoldingId(portfolioId, fundCode),
+          portfolioId,
+          assetClassId: 'equity',
+          instrumentType: 'fund',
+          fundCode,
+          fundName: fund?.name || fundCode,
+          share,
+          costPrice: cost,
+          costAmount: share * cost,
+          currentNav: Number(fund?.dwjz) || null,
+          estimatedNav: Number(fund?.gsz) || Number(fund?.dwjz) || null
+        })
+      );
     });
   });
 
@@ -148,7 +152,7 @@ export function previewGroupHoldingsMigration({
     migratableCount: previewHoldings.length,
     skippedCount: skipped.length,
     holdings: previewHoldings,
-    skipped,
+    skipped
   };
 }
 
@@ -157,7 +161,7 @@ export function createDefaultPortfolioState({ funds = [], holdings = {}, existin
     return {
       portfolios: existingPortfolios,
       portfolioHoldings: [],
-      portfolioSchemaVersion: PORTFOLIO_SCHEMA_VERSION,
+      portfolioSchemaVersion: PORTFOLIO_SCHEMA_VERSION
     };
   }
   const portfolio = createDefaultPortfolio('permanent', { name: '我的基金组合' });
@@ -165,6 +169,6 @@ export function createDefaultPortfolioState({ funds = [], holdings = {}, existin
   return {
     portfolios: [portfolio],
     portfolioHoldings: preview.holdings,
-    portfolioSchemaVersion: PORTFOLIO_SCHEMA_VERSION,
+    portfolioSchemaVersion: PORTFOLIO_SCHEMA_VERSION
   };
 }

@@ -9,7 +9,7 @@ export default function PortfolioMigrationPanel({
   onRunMigration,
   eyebrow = '历史迁移',
   title = '迁移预览',
-  actionLabel = '迁移持仓',
+  actionLabel = '迁移持仓'
 }) {
   const migratableCount = Number(preview?.migratableCount || preview?.holdings?.length || 0);
   const skippedCount = Number(preview?.skippedCount || 0);
@@ -79,7 +79,8 @@ export default function PortfolioMigrationPanel({
         <ul className="portfolio-import-errors">
           {skipped.slice(0, 5).map((item, index) => (
             <li key={`${item.groupId || 'group'}-${item.fundCode || index}`}>
-              {item.groupId ? `${item.groupId} / ` : ''}{item.fundCode || '-'}：{item.reason || '已跳过'}
+              {item.groupId ? `${item.groupId} / ` : ''}
+              {item.fundCode || '-'}：{item.reason || '已跳过'}
             </li>
           ))}
         </ul>

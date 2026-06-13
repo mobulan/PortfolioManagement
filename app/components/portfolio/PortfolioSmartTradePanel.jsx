@@ -3,93 +3,117 @@
 import { useMemo, useState } from 'react';
 import { ClipboardList, Save, X } from 'lucide-react';
 import {
+  applySmartTradeActualFills,
   calculateSmartCashPlan,
   createSmartTradeDrafts,
-  parsePortfolioNumber,
+  parsePortfolioNumber
 } from '@/app/lib/portfolio';
 
-const money = (value) => Number(value || 0).toLocaleString('zh-CN', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+const money = (value) =>
+  Number(value || 0).toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 
-const number = (value, digits = 2) => Number(value || 0).toLocaleString('zh-CN', {
-  maximumFractionDigits: digits,
-});
+const number = (value, digits = 2) =>
+  Number(value || 0).toLocaleString('zh-CN', {
+    maximumFractionDigits: digits
+  });
 
-const priceNumber = (value) => Number(value || 0).toLocaleString('zh-CN', {
-  minimumFractionDigits: 4,
-  maximumFractionDigits: 4,
-});
+const priceNumber = (value) =>
+  Number(value || 0).toLocaleString('zh-CN', {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4
+  });
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 const modeLabels = {
   proportional: '按比例买卖',
   smart_fill: '填坑买入',
-  smart_trim: '削峰卖出',
+  smart_trim: '削峰卖出'
 };
 
 const typeLabels = {
   buy: '买入',
   sell: '卖出',
   cash_in: '现金转入',
-  cash_out: '现金转出',
+  cash_out: '现金转出'
 };
 
 const warningLabels = {
   missing_price: '缺少价格，需手工确认',
-  sell_clipped_to_available_value: '已按最大可卖市值截断',
+  sell_clipped_to_available_value: '已按最大可卖市值截断'
 };
 
 function buildCopyText(rows = []) {
-  return rows.map((row) => [
-    typeLabels[row.type] || row.type,
-    row.fundCode,
-    row.fundName,
-    `金额 ${money(row.amount)}`,
-    row.price ? `价格 ${priceNumber(row.price)}` : '价格 -',
-    row.share ? `份额 ${number(row.share)}` : '份额 -',
-  ].filter(Boolean).join(' | ')).join('\n');
+  return rows
+    .map((row) =>
+      [
+        typeLabels[row.type] || row.type,
+        row.fundCode,
+        row.fundName,
+        `金额 ${money(row.amount)}`,
+        row.price ? `价格 ${priceNumber(row.price)}` : '价格 -',
+        row.share ? `份额 ${number(row.share)}` : '份额 -'
+      ]
+        .filter(Boolean)
+        .join(' | ')
+    )
+    .join('\n');
 }
 
-export default function PortfolioSmartTradePanel({
-  portfolio,
-  holdings = [],
-  funds = [],
-  onApplyDrafts,
-}) {
+export default function PortfolioSmartTradePanel({ portfolio, holdings = [], funds = [], onApplyDrafts }) {
   const [direction, setDirection] = useState('buy');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(today());
+  const [actualFills, setActualFills] = useState({});
   const parsedAmount = parsePortfolioNumber(amount, 0);
   const cashflow = direction === 'sell' ? -Math.abs(parsedAmount) : Math.abs(parsedAmount);
 
-  const plan = useMemo(() => (
-    portfolio && parsedAmount > 0
-      ? calculateSmartCashPlan(portfolio, holdings, cashflow)
-      : null
-  ), [cashflow, holdings, parsedAmount, portfolio]);
+  const plan = useMemo(
+    () => (portfolio && parsedAmount > 0 ? calculateSmartCashPlan(portfolio, holdings, cashflow) : null),
+    [cashflow, holdings, parsedAmount, portfolio]
+  );
 
-  const drafts = useMemo(() => (
-    portfolio && plan
-      ? createSmartTradeDrafts({
-        portfolio,
-        holdings,
-        funds,
-        plan,
-        date,
-      })
-      : { rows: [], warnings: [], blockingWarnings: [], mode: '' }
-  ), [date, funds, holdings, plan, portfolio]);
+  const drafts = useMemo(
+    () =>
+      portfolio && plan
+        ? createSmartTradeDrafts({
+            portfolio,
+            holdings,
+            funds,
+            plan,
+            date
+          })
+        : { rows: [], warnings: [], blockingWarnings: [], mode: '' },
+    [date, funds, holdings, plan, portfolio]
+  );
 
-  const executableRows = drafts.rows.filter((row) => !row.warning || row.warning === 'sell_clipped_to_available_value');
-  const hasBlockingWarnings = drafts.blockingWarnings.length > 0 || drafts.rows.some((row) => row.warning === 'missing_price');
+  const filledRows = useMemo(() => applySmartTradeActualFills(drafts.rows, actualFills), [actualFills, drafts.rows]);
+  const executableRows = filledRows.filter((row) => !row.warning || row.warning === 'sell_clipped_to_available_value');
+  const hasBlockingWarnings =
+    drafts.blockingWarnings.length > 0 || drafts.rows.some((row) => row.warning === 'missing_price');
   const executableAmount = executableRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
-  const applyDrafts = () => {
+  const applyDrafts = (status = 'confirmed') => {
     if (!executableRows.length || hasBlockingWarnings) return;
-    onApplyDrafts?.(executableRows);
+    onApplyDrafts?.(
+      executableRows.map((row) => ({ ...row, status })),
+      { status }
+    );
+    setActualFills({});
+    setAmount('');
+  };
+
+  const setActualFill = (rowId, field, value) => {
+    setActualFills((current) => ({
+      ...current,
+      [rowId]: {
+        ...(current[rowId] || {}),
+        [field]: value
+      }
+    }));
   };
 
   const copyRows = async () => {
@@ -108,8 +132,16 @@ export default function PortfolioSmartTradePanel({
 
       <div className="portfolio-form portfolio-smart-trade-form">
         <div className="portfolio-mode-toggle" role="group" aria-label="买卖方向">
-          <button type="button" className={direction === 'buy' ? 'is-active' : ''} onClick={() => setDirection('buy')}>买入</button>
-          <button type="button" className={direction === 'sell' ? 'is-active' : ''} onClick={() => setDirection('sell')}>卖出</button>
+          <button type="button" className={direction === 'buy' ? 'is-active' : ''} onClick={() => setDirection('buy')}>
+            买入
+          </button>
+          <button
+            type="button"
+            className={direction === 'sell' ? 'is-active' : ''}
+            onClick={() => setDirection('sell')}
+          >
+            卖出
+          </button>
         </div>
         <input
           className="input"
@@ -144,9 +176,13 @@ export default function PortfolioSmartTradePanel({
           {drafts.blockingWarnings.map((warning) => (
             <li key={`${warning.code}-${warning.assetClassId || 'all'}`}>{warning.message || warning.code}</li>
           ))}
-          {drafts.rows.filter((row) => row.warning).map((row) => (
-            <li key={`${row.id}-${row.warning}`}>{row.fundName}: {warningLabels[row.warning] || row.warning}</li>
-          ))}
+          {drafts.rows
+            .filter((row) => row.warning)
+            .map((row) => (
+              <li key={`${row.id}-${row.warning}`}>
+                {row.fundName}: {warningLabels[row.warning] || row.warning}
+              </li>
+            ))}
         </ul>
       )}
 
@@ -158,27 +194,63 @@ export default function PortfolioSmartTradePanel({
               <th>基金</th>
               <th>编号</th>
               <th>类别</th>
-              <th className="portfolio-number-cell">金额</th>
-              <th className="portfolio-number-cell">参考价格</th>
-              <th className="portfolio-number-cell">预估份额</th>
+              <th className="portfolio-number-cell">成交金额</th>
+              <th className="portfolio-number-cell">成交净值</th>
+              <th className="portfolio-number-cell">成交份额</th>
+              <th className="portfolio-number-cell">手续费</th>
             </tr>
           </thead>
           <tbody>
-            {drafts.rows.length ? drafts.rows.map((row) => (
-              <tr key={row.id}>
-                <td>{typeLabels[row.type] || row.type}</td>
-                <td>
-                  <strong>{row.fundName}</strong>
-                </td>
-                <td>{row.fundCode || '-'}</td>
-                <td>{row.assetClassName}</td>
-                <td className="portfolio-number-cell">¥{money(row.amount)}</td>
-                <td className="portfolio-number-cell">{row.price ? priceNumber(row.price) : '-'}</td>
-                <td className="portfolio-number-cell">{row.share ? number(row.share) : '-'}</td>
-              </tr>
-            )) : (
+            {drafts.rows.length ? (
+              filledRows.map((row) => (
+                <tr key={row.id}>
+                  <td>{typeLabels[row.type] || row.type}</td>
+                  <td>
+                    <strong>{row.fundName}</strong>
+                  </td>
+                  <td>{row.fundCode || '-'}</td>
+                  <td>{row.assetClassName}</td>
+                  <td className="portfolio-number-cell">
+                    <input
+                      className="input portfolio-table-input"
+                      inputMode="decimal"
+                      value={actualFills[row.id]?.amount ?? row.amount}
+                      onChange={(event) => setActualFill(row.id, 'amount', event.target.value)}
+                      aria-label={`${row.fundName}成交金额`}
+                    />
+                  </td>
+                  <td className="portfolio-number-cell">
+                    <input
+                      className="input portfolio-table-input"
+                      inputMode="decimal"
+                      value={actualFills[row.id]?.price ?? row.price}
+                      onChange={(event) => setActualFill(row.id, 'price', event.target.value)}
+                      aria-label={`${row.fundName}成交净值`}
+                    />
+                  </td>
+                  <td className="portfolio-number-cell">
+                    <input
+                      className="input portfolio-table-input"
+                      inputMode="decimal"
+                      value={actualFills[row.id]?.share ?? row.share}
+                      onChange={(event) => setActualFill(row.id, 'share', event.target.value)}
+                      aria-label={`${row.fundName}成交份额`}
+                    />
+                  </td>
+                  <td className="portfolio-number-cell">
+                    <input
+                      className="input portfolio-table-input"
+                      inputMode="decimal"
+                      value={actualFills[row.id]?.fee ?? row.fee ?? 0}
+                      onChange={(event) => setActualFill(row.id, 'fee', event.target.value)}
+                      aria-label={`${row.fundName}手续费`}
+                    />
+                  </td>
+                </tr>
+              ))
+            ) : (
               <tr>
-                <td colSpan={7}>输入金额后自动生成每只基金的买卖金额和份额。</td>
+                <td colSpan={8}>输入金额后自动生成每只基金的买卖金额和份额。</td>
               </tr>
             )}
           </tbody>
@@ -186,9 +258,23 @@ export default function PortfolioSmartTradePanel({
       </div>
 
       <div className="portfolio-inline-form">
-        <button type="button" className="button" onClick={applyDrafts} disabled={!executableRows.length || hasBlockingWarnings}>
+        <button
+          type="button"
+          className="button"
+          onClick={() => applyDrafts('confirmed')}
+          disabled={!executableRows.length || hasBlockingWarnings}
+        >
           <Save size={16} />
           应用买卖草稿
+        </button>
+        <button
+          type="button"
+          className="button secondary"
+          onClick={() => applyDrafts('planned')}
+          disabled={!executableRows.length || hasBlockingWarnings}
+        >
+          <ClipboardList size={16} />
+          保存为计划
         </button>
         <button type="button" className="button secondary" onClick={copyRows} disabled={!drafts.rows.length}>
           <ClipboardList size={16} />
@@ -198,7 +284,7 @@ export default function PortfolioSmartTradePanel({
           <X size={16} />
           清空金额
         </button>
-        <span className="muted">份额按今日预估净值测算，实际成交以基金平台确认为准。</span>
+        <span className="muted">草稿默认使用预估净值，可在表格中批量回填实际成交后一次入账。</span>
       </div>
     </section>
   );

@@ -4,7 +4,7 @@ import {
   PORTFOLIO_SCHEMA_VERSION,
   PORTFOLIO_STORAGE_KEYS,
   normalizePortfolio,
-  normalizePortfolioHolding,
+  normalizePortfolioHolding
 } from './schema.js';
 import { createDefaultPortfolioState } from './migrations.js';
 
@@ -20,7 +20,7 @@ export function readPortfolioState() {
     portfolioPrincipalRecords: get(PORTFOLIO_STORAGE_KEYS.portfolioPrincipalRecords, []),
     portfolioSnapshots: get(PORTFOLIO_STORAGE_KEYS.portfolioSnapshots, []),
     portfolioBacktests: get(PORTFOLIO_STORAGE_KEYS.portfolioBacktests, []),
-    portfolioSettings: get(PORTFOLIO_STORAGE_KEYS.portfolioSettings, DEFAULT_PORTFOLIO_SETTINGS),
+    portfolioSettings: get(PORTFOLIO_STORAGE_KEYS.portfolioSettings, DEFAULT_PORTFOLIO_SETTINGS)
   };
 }
 
@@ -43,7 +43,7 @@ export function upsertPortfolio(portfolio) {
   const state = readPortfolioState();
   const exists = state.portfolios.some((row) => row.id === normalized.id);
   const portfolios = exists
-    ? state.portfolios.map((row) => row.id === normalized.id ? normalized : row)
+    ? state.portfolios.map((row) => (row.id === normalized.id ? normalized : row))
     : [...state.portfolios, normalized];
   set(PORTFOLIO_STORAGE_KEYS.portfolios, portfolios);
   return normalized;
@@ -54,7 +54,7 @@ export function upsertPortfolioHolding(holding) {
   const state = readPortfolioState();
   const exists = state.portfolioHoldings.some((row) => row.id === normalized.id);
   const portfolioHoldings = exists
-    ? state.portfolioHoldings.map((row) => row.id === normalized.id ? normalized : row)
+    ? state.portfolioHoldings.map((row) => (row.id === normalized.id ? normalized : row))
     : [...state.portfolioHoldings, normalized];
   set(PORTFOLIO_STORAGE_KEYS.portfolioHoldings, portfolioHoldings);
   return normalized;

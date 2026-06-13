@@ -25,14 +25,55 @@ export function createPortfolioSnapshot({ portfolio, holdings = [], date, source
       .map((holding) => ({
         holdingId: holding.id,
         fundCode: holding.fundCode || '',
-        value: Number(holding.currentValue ?? holding.manualValue ?? (holding.share || 0) * (holding.estimatedNav ?? holding.currentNav ?? holding.costPrice ?? 0)) || 0,
+        value:
+          Number(
+            holding.currentValue ??
+              holding.manualValue ??
+              (holding.share || 0) * (holding.estimatedNav ?? holding.currentNav ?? holding.costPrice ?? 0)
+          ) || 0,
         principal: Number(holding.costAmount) || 0,
-        returnRate: Number(holding.costAmount) ? ((Number(holding.currentValue ?? holding.manualValue ?? (holding.share || 0) * (holding.estimatedNav ?? holding.currentNav ?? holding.costPrice ?? 0)) || 0) - Number(holding.costAmount)) / Number(holding.costAmount) : 0,
+        returnRate: Number(holding.costAmount)
+          ? ((Number(
+              holding.currentValue ??
+                holding.manualValue ??
+                (holding.share || 0) * (holding.estimatedNav ?? holding.currentNav ?? holding.costPrice ?? 0)
+            ) || 0) -
+              Number(holding.costAmount)) /
+            Number(holding.costAmount)
+          : 0
       })),
     source,
     note,
-    createdAt: new Date().toISOString(),
+    createdAt: new Date().toISOString()
   };
+}
+
+export function createSnapshotVersionEntry(snapshot, replacedAt = new Date().toISOString()) {
+  if (!snapshot?.portfolioId || !snapshot?.date) return null;
+  return {
+    id: `snapshot_version_${createPortfolioId()}`,
+    portfolioId: snapshot.portfolioId,
+    date: snapshot.date,
+    snapshot: { ...snapshot },
+    replacedAt
+  };
+}
+
+export function restoreSnapshotVersion({ snapshots = [], version } = {}) {
+  if (!version?.snapshot?.portfolioId || !version?.snapshot?.date) return snapshots;
+  const restored = {
+    ...version.snapshot,
+    id: `snapshot_${createPortfolioId()}`,
+    source: 'restored',
+    note: version.snapshot.note ? `${version.snapshot.note}（已恢复）` : '从历史版本恢复',
+    createdAt: new Date().toISOString()
+  };
+  return [
+    ...(Array.isArray(snapshots) ? snapshots : []).filter(
+      (row) => !(row.portfolioId === restored.portfolioId && row.date === restored.date)
+    ),
+    restored
+  ].sort((a, b) => String(a.date).localeCompare(String(b.date)));
 }
 
 const getToday = () => new Date().toISOString().slice(0, 10);
@@ -43,34 +84,33 @@ const getPortfolioSnapshotSettings = (portfolioSettings = {}, portfolioId = '') 
   const scoped = portfolioSettings?.portfolioSnapshotSettings?.[portfolioId];
   return {
     ...(isObject(portfolioSettings) ? portfolioSettings : {}),
-    ...(isObject(scoped) ? scoped : {}),
+    ...(isObject(scoped) ? scoped : {})
   };
 };
 
-const isAutomaticSnapshotEnabled = (settings) => (
-  settings.automaticDailySnapshotEnabled === true
-  || settings.autoSnapshotEnabled === true
-  || settings.snapshotReminderEnabled === true
-);
+const isAutomaticSnapshotEnabled = (settings) =>
+  settings.automaticDailySnapshotEnabled === true ||
+  settings.autoSnapshotEnabled === true ||
+  settings.snapshotReminderEnabled === true;
 
-const getAutomaticSnapshotConflictMode = (settings) => (
+const getAutomaticSnapshotConflictMode = (settings) =>
   ['skip', 'overwrite'].includes(settings.automaticSnapshotConflictMode)
     ? settings.automaticSnapshotConflictMode
-    : 'skip'
-);
+    : 'skip';
 
-const sortSnapshots = (snapshots) => [...snapshots].sort((a, b) => {
-  const dateOrder = String(a?.date || '').localeCompare(String(b?.date || ''));
-  if (dateOrder) return dateOrder;
-  return String(a?.portfolioId || '').localeCompare(String(b?.portfolioId || ''));
-});
+const sortSnapshots = (snapshots) =>
+  [...snapshots].sort((a, b) => {
+    const dateOrder = String(a?.date || '').localeCompare(String(b?.date || ''));
+    if (dateOrder) return dateOrder;
+    return String(a?.portfolioId || '').localeCompare(String(b?.portfolioId || ''));
+  });
 
 export function prepareAutomaticDailySnapshot({
   portfolio,
   holdings = [],
   snapshots = [],
   portfolioSettings = {},
-  date = getToday(),
+  date = getToday()
 } = {}) {
   if (!portfolio?.id) {
     return {
@@ -78,7 +118,7 @@ export function prepareAutomaticDailySnapshot({
       reason: 'missing_portfolio',
       snapshot: null,
       snapshots,
-      shouldPersist: false,
+      shouldPersist: false
     };
   }
 
@@ -89,7 +129,7 @@ export function prepareAutomaticDailySnapshot({
       reason: 'disabled',
       snapshot: null,
       snapshots,
-      shouldPersist: false,
+      shouldPersist: false
     };
   }
 
@@ -103,7 +143,7 @@ export function prepareAutomaticDailySnapshot({
       reason: 'already_exists',
       snapshot: existing,
       snapshots,
-      shouldPersist: false,
+      shouldPersist: false
     };
   }
 
@@ -112,7 +152,7 @@ export function prepareAutomaticDailySnapshot({
     holdings,
     date,
     source: 'auto',
-    note: 'Automatic daily snapshot',
+    note: 'Automatic daily snapshot'
   });
   const nextSnapshots = existing
     ? rows.map((row) => (row?.portfolioId === portfolio.id && row?.date === date ? snapshot : row))
@@ -123,6 +163,6 @@ export function prepareAutomaticDailySnapshot({
     reason: existing ? 'overwritten' : 'created',
     snapshot,
     snapshots: sortSnapshots(nextSnapshots),
-    shouldPersist: true,
+    shouldPersist: true
   };
 }

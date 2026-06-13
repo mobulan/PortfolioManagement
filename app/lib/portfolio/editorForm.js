@@ -14,9 +14,8 @@ export function normalizeAllocationDraftPercents(rows = []) {
 
   const rawValues = allocations.map((row) => parsePercent(row?.targetPercent));
   const total = rawValues.reduce((sum, value) => sum + value, 0);
-  const normalizedValues = total > 0
-    ? rawValues.map((value) => (value / total) * 100)
-    : allocations.map(() => 100 / allocations.length);
+  const normalizedValues =
+    total > 0 ? rawValues.map((value) => (value / total) * 100) : allocations.map(() => 100 / allocations.length);
 
   const nextValues = normalizedValues.map((value) => Number(formatPercent(value)));
   const roundedTotal = nextValues.reduce((sum, value) => sum + value, 0);
@@ -24,6 +23,6 @@ export function normalizeAllocationDraftPercents(rows = []) {
 
   return allocations.map((row, index) => ({
     ...row,
-    targetPercent: formatPercent(nextValues[index]),
+    targetPercent: formatPercent(nextValues[index])
   }));
 }

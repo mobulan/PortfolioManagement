@@ -4,7 +4,7 @@ import { getAssetClassName } from './schema.js';
 const DEFAULT_OPTIONS = {
   maxSingleAssetClassRatio: 0.4,
   minSnapshots: 2,
-  defaultDeviationThreshold: 0.05,
+  defaultDeviationThreshold: 0.05
 };
 
 const toNumber = (value, fallback = 0) => {
@@ -19,9 +19,7 @@ const round = (value, digits = 6) => {
   return Math.round(toNumber(value) * factor) / factor;
 };
 
-const getSnapshotDailyProfit = (snapshot) => (
-  snapshot?.dailyProfit ?? snapshot?.dailyEstimatedProfit ?? 0
-);
+const getSnapshotDailyProfit = (snapshot) => snapshot?.dailyProfit ?? snapshot?.dailyEstimatedProfit ?? 0;
 
 const normalizeSnapshot = (snapshot = {}) => ({
   id: snapshot.id || '',
@@ -32,13 +30,14 @@ const normalizeSnapshot = (snapshot = {}) => ({
   totalProfit: toNumber(snapshot.totalProfit),
   totalReturnRate: toNumber(snapshot.totalReturnRate),
   dailyProfit: toNumber(getSnapshotDailyProfit(snapshot)),
-  assetClassValues: snapshot.assetClassValues || {},
+  assetClassValues: snapshot.assetClassValues || {}
 });
 
-const sortSnapshots = (snapshots = []) => (Array.isArray(snapshots) ? snapshots : [])
-  .map(normalizeSnapshot)
-  .filter((snapshot) => snapshot.date || snapshot.id)
-  .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+const sortSnapshots = (snapshots = []) =>
+  (Array.isArray(snapshots) ? snapshots : [])
+    .map(normalizeSnapshot)
+    .filter((snapshot) => snapshot.date || snapshot.id)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
 function calculateMaxDrawdown(series) {
   let peak = 0;
@@ -68,8 +67,9 @@ function buildTrendMetrics(snapshots) {
     totalValueChange,
     totalValueChangeRate: first?.totalValue ? totalValueChange / first.totalValue : 0,
     latestChange: latest && previous ? latest.totalValue - previous.totalValue : 0,
-    latestChangeRate: latest && previous?.totalValue ? (latest.totalValue - previous.totalValue) / previous.totalValue : 0,
-    maxDrawdown: calculateMaxDrawdown(series),
+    latestChangeRate:
+      latest && previous?.totalValue ? (latest.totalValue - previous.totalValue) / previous.totalValue : 0,
+    maxDrawdown: calculateMaxDrawdown(series)
   };
 }
 
@@ -93,7 +93,7 @@ function buildAssetClassContributions(summary) {
         targetRatio: clampRatio(row.targetRatio),
         drift: toNumber(row.drift),
         holdingCount: toNumber(row.holdingCount),
-        profitContributionRate: totalProfit === 0 ? 0 : profit / totalProfit,
+        profitContributionRate: totalProfit === 0 ? 0 : profit / totalProfit
       };
     })
     .sort((a, b) => Math.abs(b.profit) - Math.abs(a.profit));
@@ -117,7 +117,7 @@ function buildHoldingContributions(holdings = []) {
       profit: holding.totalProfit,
       totalReturnRate: holding.totalReturnRate,
       dailyProfit: holding.dailyEstimatedProfit,
-      profitContributionRate: totalProfit === 0 ? 0 : holding.totalProfit / totalProfit,
+      profitContributionRate: totalProfit === 0 ? 0 : holding.totalProfit / totalProfit
     }))
     .sort((a, b) => Math.abs(b.profit) - Math.abs(a.profit));
 }
@@ -125,6 +125,7 @@ function buildHoldingContributions(holdings = []) {
 function buildRiskAlerts({ summary, trend, options }) {
   const alerts = [];
   const assetClasses = Array.isArray(summary?.assetClasses) ? summary.assetClasses : [];
+  const hasInvestedAssets = toNumber(summary?.totalValue) > 0;
 
   if (trend.snapshotCount < options.minSnapshots) {
     alerts.push({
@@ -133,11 +134,11 @@ function buildRiskAlerts({ summary, trend, options }) {
       title: '快照不足',
       message: `当前只有 ${trend.snapshotCount} 条快照，趋势判断至少需要 ${options.minSnapshots} 条。`,
       current: trend.snapshotCount,
-      threshold: options.minSnapshots,
+      threshold: options.minSnapshots
     });
   }
 
-  for (const row of assetClasses) {
+  for (const row of hasInvestedAssets ? assetClasses : []) {
     const currentRatio = clampRatio(row.currentRatio);
     const targetRatio = clampRatio(row.targetRatio);
     const drift = currentRatio - targetRatio;
@@ -154,7 +155,7 @@ function buildRiskAlerts({ summary, trend, options }) {
         title: '单类资产占比过高',
         message: `${assetClassName} 当前占比 ${round(currentRatio * 100, 2)}%，高于 ${round(options.maxSingleAssetClassRatio * 100, 2)}% 上限。`,
         currentRatio,
-        threshold: options.maxSingleAssetClassRatio,
+        threshold: options.maxSingleAssetClassRatio
       });
     }
 
@@ -169,7 +170,7 @@ function buildRiskAlerts({ summary, trend, options }) {
         currentRatio,
         targetRatio,
         drift,
-        threshold,
+        threshold
       });
     }
   }
@@ -178,11 +179,14 @@ function buildRiskAlerts({ summary, trend, options }) {
 }
 
 function summarizeAlerts(alerts) {
-  return alerts.reduce((summary, alert) => {
-    summary.total += 1;
-    summary[alert.severity] = (summary[alert.severity] || 0) + 1;
-    return summary;
-  }, { total: 0, high: 0, medium: 0, low: 0 });
+  return alerts.reduce(
+    (summary, alert) => {
+      summary.total += 1;
+      summary[alert.severity] = (summary[alert.severity] || 0) + 1;
+      return summary;
+    },
+    { total: 0, high: 0, medium: 0, low: 0 }
+  );
 }
 
 export function buildDashboardRiskMetrics({
@@ -190,13 +194,13 @@ export function buildDashboardRiskMetrics({
   snapshots = [],
   holdings = [],
   summary = null,
-  options = {},
+  options = {}
 } = {}) {
   const mergedOptions = { ...DEFAULT_OPTIONS, ...options };
   const trend = buildTrendMetrics(snapshots);
   const contributions = {
     assetClasses: buildAssetClassContributions(summary),
-    holdings: buildHoldingContributions(holdings),
+    holdings: buildHoldingContributions(holdings)
   };
   const alerts = buildRiskAlerts({ portfolio, summary, trend, options: mergedOptions });
 
@@ -205,6 +209,6 @@ export function buildDashboardRiskMetrics({
     trend,
     contributions,
     alerts,
-    alertSummary: summarizeAlerts(alerts),
+    alertSummary: summarizeAlerts(alerts)
   };
 }

@@ -8,7 +8,9 @@ export const parsePortfolioNumber = (value, fallback = 0) => {
     .replace(/[￥¥\s]/g, '');
   if (!text) return fallback;
   const normalized = text.includes(',')
-    ? (/^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(text) ? text.replace(/,/g, '') : '')
+    ? /^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(text)
+      ? text.replace(/,/g, '')
+      : ''
     : text;
   const num = Number(normalized);
   return Number.isFinite(num) ? num : fallback;
@@ -17,7 +19,9 @@ export const parsePortfolioNumber = (value, fallback = 0) => {
 const isPortfolioNumberValid = (value) => {
   if (value === null || value === undefined || value === '') return true;
   if (typeof value === 'number') return Number.isFinite(value);
-  const text = String(value).trim().replace(/[￥¥\s]/g, '');
+  const text = String(value)
+    .trim()
+    .replace(/[￥¥\s]/g, '');
   if (!text) return true;
   if (text.includes(',')) return /^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(text);
   return Number.isFinite(Number(text));
@@ -31,7 +35,7 @@ export function getPortfolioHoldingDraftErrors(draft = {}) {
     ['manualValue', '当前市值'],
     ['currentValue', '当前市值'],
     ['share', '份额'],
-    ['estimatedNav', '估算净值'],
+    ['estimatedNav', '估算净值']
   ];
   return fields
     .filter(([field]) => !isPortfolioNumberValid(draft[field]))
@@ -47,7 +51,7 @@ export function normalizePortfolioFundCandidate(input = {}) {
     name,
     estimatedNav: parsePortfolioNumber(input.gsz ?? input.estimatedNav ?? input.dwjz ?? input.currentNav, null),
     currentNav: parsePortfolioNumber(input.dwjz ?? input.currentNav ?? input.gsz ?? input.estimatedNav, null),
-    previousNav: parsePortfolioNumber(input.lastNav ?? input.previousNav, null),
+    previousNav: parsePortfolioNumber(input.lastNav ?? input.previousNav, null)
   };
 }
 
@@ -55,13 +59,15 @@ export function findPortfolioFundCandidate(funds = [], query = '') {
   const normalizedQuery = clean(query).toLowerCase();
   if (!normalizedQuery) return null;
 
-  const candidates = (Array.isArray(funds) ? funds : [])
-    .map(normalizePortfolioFundCandidate)
-    .filter(Boolean);
+  const candidates = (Array.isArray(funds) ? funds : []).map(normalizePortfolioFundCandidate).filter(Boolean);
 
-  return candidates.find((fund) => fund.code === normalizedQuery)
-    || candidates.find((fund) => fund.code.includes(normalizedQuery) || fund.name.toLowerCase().includes(normalizedQuery))
-    || null;
+  return (
+    candidates.find((fund) => fund.code === normalizedQuery) ||
+    candidates.find(
+      (fund) => fund.code.includes(normalizedQuery) || fund.name.toLowerCase().includes(normalizedQuery)
+    ) ||
+    null
+  );
 }
 
 export function upsertPortfolioHoldingFund(funds = [], holding = {}, candidates = []) {
@@ -75,17 +81,14 @@ export function upsertPortfolioHoldingFund(funds = [], holding = {}, candidates 
   }
 
   const candidateList = Array.isArray(candidates) ? candidates : [];
-  const rawCandidate = candidateList.find((item) => (
-    clean(item?.code ?? item?.CODE ?? item?.fundCode) === code
-  ));
-  const candidate = normalizePortfolioFundCandidate(rawCandidate)
-    || normalizePortfolioFundCandidate(holding)
-    || { code, name: clean(holding.fundName) || code };
+  const rawCandidate = candidateList.find((item) => clean(item?.code ?? item?.CODE ?? item?.fundCode) === code);
+  const candidate = normalizePortfolioFundCandidate(rawCandidate) ||
+    normalizePortfolioFundCandidate(holding) || { code, name: clean(holding.fundName) || code };
 
   const nextFund = {
     ...(rawCandidate || {}),
     code,
-    name: candidate.name || clean(holding.fundName) || code,
+    name: candidate.name || clean(holding.fundName) || code
   };
 
   const estimatedNav = candidate.estimatedNav ?? holding.estimatedNav;
@@ -105,26 +108,31 @@ export function buildPortfolioHoldingFromDraft({ portfolioId = '', draft = {}, f
   const valueMode = draft.valueMode === 'amount' ? 'amount' : 'share';
   const costAmount = parsePortfolioNumber(draft.costAmount, 0);
   const amountValue = parsePortfolioNumber(draft.manualValue || draft.currentValue || costAmount, 0);
-  const amountModeNav = parsePortfolioNumber(draft.estimatedNav || matchedFund?.estimatedNav || matchedFund?.currentNav, null);
-  const manualValue = valueMode === 'amount'
-    ? amountValue
-    : null;
-  const share = valueMode === 'amount'
-    ? (instrumentType === 'fund' && amountModeNav > 0 ? parsePortfolioNumber(amountValue / amountModeNav, 0) : parsePortfolioNumber(draft.share || 1, 1))
-    : parsePortfolioNumber(draft.share, instrumentType === 'cash' ? 1 : 0);
-  const estimatedNav = (valueMode === 'amount' && instrumentType === 'fund')
-    ? amountModeNav
-    : valueMode === 'amount' || instrumentType === 'cash'
-    ? null
-    : parsePortfolioNumber(draft.estimatedNav || matchedFund?.estimatedNav || matchedFund?.currentNav, null);
-  const currentNav = (valueMode === 'amount' && instrumentType === 'fund')
-    ? parsePortfolioNumber(matchedFund?.currentNav || amountModeNav, null)
-    : valueMode === 'amount' || instrumentType === 'cash'
-    ? null
-    : parsePortfolioNumber(matchedFund?.currentNav || estimatedNav, null);
-  const previousNav = valueMode === 'amount' || instrumentType === 'cash'
-    ? null
-    : parsePortfolioNumber(matchedFund?.previousNav, null);
+  const amountModeNav = parsePortfolioNumber(
+    draft.estimatedNav || matchedFund?.estimatedNav || matchedFund?.currentNav,
+    null
+  );
+  const manualValue = valueMode === 'amount' ? amountValue : null;
+  const share =
+    valueMode === 'amount'
+      ? instrumentType === 'fund' && amountModeNav > 0
+        ? parsePortfolioNumber(amountValue / amountModeNav, 0)
+        : parsePortfolioNumber(draft.share || 1, 1)
+      : parsePortfolioNumber(draft.share, instrumentType === 'cash' ? 1 : 0);
+  const estimatedNav =
+    valueMode === 'amount' && instrumentType === 'fund'
+      ? amountModeNav
+      : valueMode === 'amount' || instrumentType === 'cash'
+        ? null
+        : parsePortfolioNumber(draft.estimatedNav || matchedFund?.estimatedNav || matchedFund?.currentNav, null);
+  const currentNav =
+    valueMode === 'amount' && instrumentType === 'fund'
+      ? parsePortfolioNumber(matchedFund?.currentNav || amountModeNav, null)
+      : valueMode === 'amount' || instrumentType === 'cash'
+        ? null
+        : parsePortfolioNumber(matchedFund?.currentNav || estimatedNav, null);
+  const previousNav =
+    valueMode === 'amount' || instrumentType === 'cash' ? null : parsePortfolioNumber(matchedFund?.previousNav, null);
 
   return normalizePortfolioHolding({
     portfolioId,
@@ -137,6 +145,6 @@ export function buildPortfolioHoldingFromDraft({ portfolioId = '', draft = {}, f
     estimatedNav,
     currentNav,
     previousNav,
-    manualValue,
+    manualValue
   });
 }

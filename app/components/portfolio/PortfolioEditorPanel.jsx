@@ -11,7 +11,7 @@ import {
   getAssetClassName,
   normalizeAllocationDraftPercents,
   normalizePortfolio,
-  validateTargetAllocations,
+  validateTargetAllocations
 } from '@/app/lib/portfolio';
 
 const pct = (value) => `${((Number(value) || 0) * 100).toFixed(2)}%`;
@@ -32,7 +32,7 @@ function allocationDraftFromRows(rows = []) {
     assetClassId: row.assetClassId || 'other',
     assetClassName: row.assetClassName || getAssetClassName(row.assetClassId),
     targetPercent: asPercent(row.targetRatio),
-    thresholdPercent: asPercent(row.rebalanceThreshold ?? 0.05),
+    thresholdPercent: asPercent(row.rebalanceThreshold ?? 0.05)
   }));
 }
 
@@ -43,7 +43,9 @@ function portfolioDraftFromPortfolio(portfolio) {
     description: portfolio?.description || '',
     baseCurrency: portfolio?.baseCurrency || 'CNY',
     archived: Boolean(portfolio?.archived),
-    allocations: allocationDraftFromRows(portfolio?.targetAllocations || createDefaultAllocations(portfolio?.type || 'custom')),
+    allocations: allocationDraftFromRows(
+      portfolio?.targetAllocations || createDefaultAllocations(portfolio?.type || 'custom')
+    )
   };
 }
 
@@ -52,7 +54,7 @@ function normalizedAllocationsFromDraft(draft) {
     assetClassId: row.assetClassId,
     assetClassName: getAssetClassName(row.assetClassId),
     targetRatio: fromPercent(row.targetPercent),
-    rebalanceThreshold: fromPercent(row.thresholdPercent || 5),
+    rebalanceThreshold: fromPercent(row.thresholdPercent || 5)
   }));
 }
 
@@ -61,7 +63,7 @@ export default function PortfolioEditorPanel({
   onSavePortfolio,
   onDeletePortfolio,
   onCreatePortfolio,
-  onDraftChange,
+  onDraftChange
 }) {
   const [draft, setDraft] = useState(() => portfolioDraftFromPortfolio(portfolio));
 
@@ -71,19 +73,20 @@ export default function PortfolioEditorPanel({
 
   const normalizedAllocations = useMemo(() => normalizedAllocationsFromDraft(draft), [draft]);
   const allocationTotal = useMemo(() => calculateAllocationTotal(normalizedAllocations), [normalizedAllocations]);
-  const allocationValidation = useMemo(
-    () => validateTargetAllocations(normalizedAllocations),
-    [normalizedAllocations],
+  const allocationValidation = useMemo(() => validateTargetAllocations(normalizedAllocations), [normalizedAllocations]);
+  const normalizedDraft = useMemo(
+    () =>
+      normalizePortfolio({
+        ...(portfolio || {}),
+        name: draft.name,
+        type: draft.type,
+        description: draft.description,
+        baseCurrency: draft.baseCurrency,
+        archived: draft.archived,
+        targetAllocations: normalizedAllocations
+      }),
+    [draft, normalizedAllocations, portfolio]
   );
-  const normalizedDraft = useMemo(() => normalizePortfolio({
-    ...(portfolio || {}),
-    name: draft.name,
-    type: draft.type,
-    description: draft.description,
-    baseCurrency: draft.baseCurrency,
-    archived: draft.archived,
-    targetAllocations: normalizedAllocations,
-  }), [draft, normalizedAllocations, portfolio]);
   const canSave = Boolean(portfolio?.id && draft.name.trim() && allocationValidation.errors.length === 0);
   const totalTone = allocationValidation.isBalanced ? 'is-ok' : 'is-warning';
 
@@ -91,16 +94,14 @@ export default function PortfolioEditorPanel({
     onDraftChange?.({
       portfolio: normalizedDraft,
       allocationTotal,
-      validation: allocationValidation,
+      validation: allocationValidation
     });
   }, [allocationTotal, allocationValidation, normalizedDraft, onDraftChange]);
 
   const updateAllocation = (index, patch) => {
     setDraft((prev) => ({
       ...prev,
-      allocations: prev.allocations.map((row, rowIndex) => (
-        rowIndex === index ? { ...row, ...patch } : row
-      )),
+      allocations: prev.allocations.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row))
     }));
   };
 
@@ -108,14 +109,14 @@ export default function PortfolioEditorPanel({
     setDraft((prev) => ({
       ...prev,
       type,
-      allocations: allocationDraftFromRows(createDefaultAllocations(type)),
+      allocations: allocationDraftFromRows(createDefaultAllocations(type))
     }));
   };
 
   const normalizeAllocationsToHundred = () => {
     setDraft((prev) => ({
       ...prev,
-      allocations: normalizeAllocationDraftPercents(prev.allocations),
+      allocations: normalizeAllocationDraftPercents(prev.allocations)
     }));
   };
 
@@ -128,16 +129,16 @@ export default function PortfolioEditorPanel({
           assetClassId: 'other',
           assetClassName: getAssetClassName('other'),
           targetPercent: '0',
-          thresholdPercent: '5',
-        },
-      ],
+          thresholdPercent: '5'
+        }
+      ]
     }));
   };
 
   const removeAllocationRow = (index) => {
     setDraft((prev) => ({
       ...prev,
-      allocations: prev.allocations.filter((_, rowIndex) => rowIndex !== index),
+      allocations: prev.allocations.filter((_, rowIndex) => rowIndex !== index)
     }));
   };
 
@@ -153,7 +154,7 @@ export default function PortfolioEditorPanel({
 
   const createFromTemplate = (type) => {
     const nextPortfolio = createDefaultPortfolio(type, {
-      name: type === 'all_weather' ? '全天候组合' : templateName(type),
+      name: type === 'all_weather' ? '全天候组合' : templateName(type)
     });
     onCreatePortfolio?.(nextPortfolio);
   };
@@ -220,7 +221,9 @@ export default function PortfolioEditorPanel({
               onChange={(event) => setDraft((prev) => ({ ...prev, baseCurrency: event.target.value }))}
             >
               {currencyOptions.map((currency) => (
-                <option key={currency} value={currency}>{currency}</option>
+                <option key={currency} value={currency}>
+                  {currency}
+                </option>
               ))}
             </select>
           </Field>
@@ -230,9 +233,7 @@ export default function PortfolioEditorPanel({
       <div className={`portfolio-detail-allocation portfolio-editor-total ${totalTone}`} aria-live="polite">
         <span>目标比例合计</span>
         <strong>{pct(allocationTotal)}</strong>
-        {!allocationValidation.isBalanced && (
-          <em>{allocationValidation.delta > 0 ? '超出 100%' : '未满 100%'}</em>
-        )}
+        {!allocationValidation.isBalanced && <em>{allocationValidation.delta > 0 ? '超出 100%' : '未满 100%'}</em>}
         {allocationValidation.isBalanced && <CheckCircle2 size={16} aria-hidden="true" />}
         <button
           type="button"
@@ -259,7 +260,9 @@ export default function PortfolioEditorPanel({
               onChange={(event) => updateAllocation(index, { assetClassId: event.target.value })}
             >
               {ASSET_CLASSES.map((assetClass) => (
-                <option key={assetClass.id} value={assetClass.id}>{assetClass.name}</option>
+                <option key={assetClass.id} value={assetClass.id}>
+                  {assetClass.name}
+                </option>
               ))}
             </select>
             <input

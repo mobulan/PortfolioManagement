@@ -2,14 +2,18 @@ import assert from 'node:assert/strict';
 
 import { normalizePortfolioHolding } from '../app/lib/portfolio/schema.js';
 import {
+  applyPortfolioTransaction,
   createPortfolioTransactionBaseline,
+  getPortfolioTransactionDeleteImpact,
   rebuildPortfolioLedgerFromTransactions,
   rebuildPortfolioAfterTransactionDelete,
+  rebuildPortfolioAfterTransactionReplace
 } from '../app/lib/portfolio/transactionEngine.js';
 import {
+  applySmartTradeActualFills,
   calculateSmartCashPlan,
   createSmartTradeDrafts,
-  resolveHoldingTradePrice,
+  resolveHoldingTradePrice
 } from '../app/lib/portfolio/rebalance.js';
 
 const nearly = (actual, expected, delta = 0.000001) => {
@@ -27,11 +31,11 @@ const smartPortfolio = {
   id: portfolioId,
   targetAllocations: [
     { assetClassId: 'equity', assetClassName: 'Equity', targetRatio: 0.5, rebalanceThreshold: 0.1 },
-    { assetClassId: 'bond', assetClassName: 'Bond', targetRatio: 0.5, rebalanceThreshold: 0.1 },
+    { assetClassId: 'bond', assetClassName: 'Bond', targetRatio: 0.5, rebalanceThreshold: 0.1 }
   ],
   rebalanceConfig: {
-    defaultThreshold: 0.1,
-  },
+    defaultThreshold: 0.1
+  }
 };
 
 const baseHoldings = [
@@ -44,7 +48,7 @@ const baseHoldings = [
     fundName: 'Equity Fund',
     share: 10,
     costAmount: 20,
-    estimatedNav: 2.5,
+    estimatedNav: 2.5
   }),
   normalizePortfolioHolding({
     id: 'h_cash',
@@ -54,8 +58,8 @@ const baseHoldings = [
     fundName: 'Cash',
     share: 1,
     costAmount: 100,
-    manualValue: 100,
-  }),
+    manualValue: 100
+  })
 ];
 
 const transactions = [
@@ -69,7 +73,7 @@ const transactions = [
     amount: 50,
     share: 25,
     fee: 1,
-    date: '2026-05-10',
+    date: '2026-05-10'
   },
   {
     id: 'tx_dividend_cash',
@@ -79,7 +83,7 @@ const transactions = [
     type: 'dividend_cash',
     amount: 6,
     date: '2026-05-11',
-    note: 'Cash dividend from h_equity',
+    note: 'Cash dividend from h_equity'
   },
   {
     id: 'tx_convert_out',
@@ -91,7 +95,7 @@ const transactions = [
     amount: 30,
     share: 10,
     date: '2026-05-12',
-    relatedTransactionId: 'tx_convert_in',
+    relatedTransactionId: 'tx_convert_in'
   },
   {
     id: 'tx_convert_in',
@@ -103,8 +107,8 @@ const transactions = [
     amount: 30,
     share: 15,
     date: '2026-05-12',
-    relatedTransactionId: 'tx_convert_out',
-  },
+    relatedTransactionId: 'tx_convert_out'
+  }
 ];
 
 const smartTradeHoldings = [
@@ -117,7 +121,7 @@ const smartTradeHoldings = [
     fundName: 'Equity Fund',
     share: 100,
     costAmount: 100,
-    estimatedNav: 1,
+    estimatedNav: 1
   }),
   normalizePortfolioHolding({
     id: 'h_smart_bond',
@@ -128,13 +132,13 @@ const smartTradeHoldings = [
     fundName: 'Bond Fund',
     share: 300,
     costAmount: 300,
-    estimatedNav: 1,
-  }),
+    estimatedNav: 1
+  })
 ];
 
 const fundPrices = [
   { code: '000001', name: 'Equity Fund', gsz: '1.2500', dwjz: '1.2000', gztime: '2026-05-16 14:50' },
-  { code: '110001', name: 'Bond Fund', dwjz: '2.0000', jzrq: '2026-05-15' },
+  { code: '110001', name: 'Bond Fund', dwjz: '2.0000', jzrq: '2026-05-15' }
 ];
 
 const excelPortfolio = {
@@ -143,32 +147,46 @@ const excelPortfolio = {
     { assetClassId: 'equity', assetClassName: 'Equity', targetRatio: 0.25 },
     { assetClassId: 'bond', assetClassName: 'Bond', targetRatio: 0.25 },
     { assetClassId: 'gold', assetClassName: 'Gold', targetRatio: 0.25 },
-    { assetClassId: 'cash', assetClassName: 'Cash', targetRatio: 0.25 },
-  ],
+    { assetClassId: 'cash', assetClassName: 'Cash', targetRatio: 0.25 }
+  ]
 };
 
 const excelBuyHoldings = [
-  { id: 'h_excel_equity', portfolioId, assetClassId: 'equity', instrumentType: 'cash', fundName: 'Equity', manualValue: 100 },
+  {
+    id: 'h_excel_equity',
+    portfolioId,
+    assetClassId: 'equity',
+    instrumentType: 'cash',
+    fundName: 'Equity',
+    manualValue: 100
+  },
   { id: 'h_excel_bond', portfolioId, assetClassId: 'bond', instrumentType: 'cash', fundName: 'Bond', manualValue: 200 },
   { id: 'h_excel_gold', portfolioId, assetClassId: 'gold', instrumentType: 'cash', fundName: 'Gold', manualValue: 300 },
-  { id: 'h_excel_cash', portfolioId, assetClassId: 'cash', instrumentType: 'cash', fundName: 'Cash', manualValue: 400 },
+  { id: 'h_excel_cash', portfolioId, assetClassId: 'cash', instrumentType: 'cash', fundName: 'Cash', manualValue: 400 }
 ].map(normalizePortfolioHolding);
 
 const excelSellHoldings = [
-  { id: 'h_excel_equity', portfolioId, assetClassId: 'equity', instrumentType: 'cash', fundName: 'Equity', manualValue: 400 },
+  {
+    id: 'h_excel_equity',
+    portfolioId,
+    assetClassId: 'equity',
+    instrumentType: 'cash',
+    fundName: 'Equity',
+    manualValue: 400
+  },
   { id: 'h_excel_bond', portfolioId, assetClassId: 'bond', instrumentType: 'cash', fundName: 'Bond', manualValue: 300 },
   { id: 'h_excel_gold', portfolioId, assetClassId: 'gold', instrumentType: 'cash', fundName: 'Gold', manualValue: 200 },
-  { id: 'h_excel_cash', portfolioId, assetClassId: 'cash', instrumentType: 'cash', fundName: 'Cash', manualValue: 100 },
+  { id: 'h_excel_cash', portfolioId, assetClassId: 'cash', instrumentType: 'cash', fundName: 'Cash', manualValue: 100 }
 ].map(normalizePortfolioHolding);
 
 test('rebuild creates deterministic holdings and principal records from transactions', () => {
   const first = rebuildPortfolioLedgerFromTransactions({
     holdings: baseHoldings,
-    transactions,
+    transactions
   });
   const second = rebuildPortfolioLedgerFromTransactions({
     holdings: baseHoldings,
-    transactions: [...transactions].reverse(),
+    transactions: [...transactions].reverse()
   });
 
   assert.deepEqual(first.holdings, second.holdings);
@@ -185,11 +203,10 @@ test('rebuild creates deterministic holdings and principal records from transact
   nearly(bond.share, 15);
   nearly(bond.costAmount, 30);
 
-  assert.deepEqual(first.principalRecords.map((row) => row.transactionId), [
-    'tx_buy',
-    'tx_convert_out',
-    'tx_convert_in',
-  ]);
+  assert.deepEqual(
+    first.principalRecords.map((row) => row.transactionId),
+    ['tx_buy', 'tx_convert_out', 'tx_convert_in']
+  );
   nearly(first.principalRecords[0].amount, 51);
   nearly(first.principalRecords[1].amount, -20.285714);
   nearly(first.principalRecords[2].amount, 30);
@@ -203,11 +220,11 @@ test('delete rebuild uses baseline and preserves other portfolio rows', () => {
     instrumentType: 'fund',
     fundName: 'Other Fund',
     share: 99,
-    costAmount: 88,
+    costAmount: 88
   });
   const baseline = createPortfolioTransactionBaseline({
     portfolioId,
-    holdings: [...baseHoldings, otherHolding],
+    holdings: [...baseHoldings, otherHolding]
   });
 
   const rebuilt = rebuildPortfolioAfterTransactionDelete({
@@ -215,16 +232,23 @@ test('delete rebuild uses baseline and preserves other portfolio rows', () => {
     baseline,
     holdings: [...baseHoldings, otherHolding],
     transactions,
-    principalRecords: [
-      { id: 'other_principal', portfolioId: 'other_portfolio', transactionId: 'other_tx', amount: 1 },
-    ],
-    transactionId: 'tx_buy',
+    principalRecords: [{ id: 'other_principal', portfolioId: 'other_portfolio', transactionId: 'other_tx', amount: 1 }],
+    transactionId: 'tx_buy'
   });
 
-  assert.equal(rebuilt.transactions.some((tx) => tx.id === 'tx_buy'), false);
+  assert.equal(
+    rebuilt.transactions.some((tx) => tx.id === 'tx_buy'),
+    false
+  );
   assert.equal(rebuilt.transactions.length, transactions.length - 1);
-  assert.equal(rebuilt.holdings.some((holding) => holding.id === 'h_other'), true);
-  assert.equal(rebuilt.principalRecords.some((record) => record.id === 'other_principal'), true);
+  assert.equal(
+    rebuilt.holdings.some((holding) => holding.id === 'h_other'),
+    true
+  );
+  assert.equal(
+    rebuilt.principalRecords.some((record) => record.id === 'other_principal'),
+    true
+  );
 
   const equity = rebuilt.holdings.find((row) => row.id === 'h_equity');
   const cash = rebuilt.holdings.find((row) => row.id === 'h_cash');
@@ -237,7 +261,141 @@ test('delete rebuild uses baseline and preserves other portfolio rows', () => {
   nearly(bond.costAmount, 30);
   assert.deepEqual(
     rebuilt.principalRecords.filter((row) => row.portfolioId === portfolioId).map((row) => row.transactionId),
-    ['tx_convert_out', 'tx_convert_in'],
+    ['tx_convert_out', 'tx_convert_in']
+  );
+});
+
+test('editing a transaction replaces it and rebuilds holdings and principal records', () => {
+  const baseline = createPortfolioTransactionBaseline({
+    portfolioId,
+    holdings: baseHoldings
+  });
+  const rebuilt = rebuildPortfolioAfterTransactionReplace({
+    portfolioId,
+    baseline,
+    holdings: baseHoldings,
+    transactions,
+    principalRecords: [],
+    transaction: {
+      ...transactions[0],
+      amount: 80,
+      share: 40,
+      fee: 2,
+      note: 'corrected fill'
+    }
+  });
+
+  const edited = rebuilt.transactions.find((row) => row.id === 'tx_buy');
+  const equity = rebuilt.holdings.find((row) => row.id === 'h_equity');
+  assert.equal(edited.note, 'corrected fill');
+  nearly(edited.amount, 80);
+  nearly(equity.share, 40);
+  nearly(equity.costAmount, 81.6);
+  assert.equal(rebuilt.principalRecords.filter((row) => row.transactionId === 'tx_buy').length, 1);
+});
+
+test('delete impact counts following ledger rows and affected holdings', () => {
+  const impact = getPortfolioTransactionDeleteImpact({
+    portfolioId,
+    transaction: { id: 'tx-1', portfolioId, holdingId: 'equity', date: '2026-01-01' },
+    transactions: [
+      { id: 'tx-1', portfolioId, holdingId: 'equity', date: '2026-01-01' },
+      { id: 'tx-2', portfolioId, holdingId: 'bond', date: '2026-01-02' },
+      { id: 'tx-3', portfolioId: 'other', holdingId: 'other', date: '2026-01-03' }
+    ],
+    principalRecords: [
+      { id: 'p-1', portfolioId, transactionId: 'tx-1' },
+      { id: 'p-2', portfolioId, transactionId: 'tx-2' },
+      { id: 'p-3', portfolioId: 'other', transactionId: 'tx-3' }
+    ]
+  });
+
+  assert.equal(impact.followingTransactions, 1);
+  assert.equal(impact.principalRecords, 2);
+  assert.deepEqual(impact.affectedHoldingIds.sort(), ['bond', 'equity']);
+});
+
+test('smart trade actual fills replace draft execution values in one batch', () => {
+  const filled = applySmartTradeActualFills([{ id: 'draft-1', amount: 100, price: 1, share: 100, fee: 0, note: '' }], {
+    'draft-1': {
+      amount: '99.5',
+      price: '0.995',
+      share: '100',
+      fee: '0.5',
+      note: '平台确认'
+    }
+  });
+
+  nearly(filled[0].amount, 99.5);
+  nearly(filled[0].price, 0.995);
+  nearly(filled[0].share, 100);
+  nearly(filled[0].fee, 0.5);
+  assert.equal(filled[0].note, '平台确认');
+  assert.equal(filled[0].actualFill, true);
+});
+
+test('planned transaction is recorded without mutating holdings or principal', () => {
+  const result = applyPortfolioTransaction({
+    holdings: baseHoldings,
+    principalRecords: [],
+    transaction: {
+      id: 'tx-planned',
+      portfolioId,
+      holdingId: 'h_equity',
+      assetClassId: 'equity',
+      type: 'buy',
+      status: 'planned',
+      amount: 100,
+      share: 50,
+      date: '2026-05-20'
+    }
+  });
+
+  assert.equal(result.transaction.status, 'planned');
+  assert.deepEqual(result.holdings, baseHoldings.map(normalizePortfolioHolding));
+  assert.equal(result.principalRecords.length, 0);
+});
+
+test('fund conversion transfers cost basis without changing total principal', () => {
+  const first = applyPortfolioTransaction({
+    holdings: baseHoldings,
+    principalRecords: [],
+    transaction: {
+      id: 'convert-out',
+      portfolioId,
+      holdingId: 'h_equity',
+      assetClassId: 'equity',
+      type: 'convert_out',
+      amount: 60,
+      share: 20,
+      costBasisAmount: 10,
+      principalImpact: -10,
+      date: '2026-05-20'
+    }
+  });
+  const second = applyPortfolioTransaction({
+    holdings: first.holdings,
+    principalRecords: first.principalRecords,
+    transaction: {
+      id: 'convert-in',
+      portfolioId,
+      holdingId: 'h_bond',
+      assetClassId: 'bond',
+      type: 'convert_in',
+      amount: 60,
+      share: 30,
+      costBasisAmount: 10,
+      principalImpact: 10,
+      date: '2026-05-20'
+    }
+  });
+
+  const before = baseHoldings.reduce((sum, row) => sum + Number(row.costAmount || 0), 0);
+  const after = second.holdings.reduce((sum, row) => sum + Number(row.costAmount || 0), 0);
+  nearly(after, before);
+  nearly(
+    second.principalRecords.reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    0
   );
 });
 
@@ -248,7 +406,7 @@ test('smart buy below threshold fills underweight asset and uses estimated price
     holdings: smartTradeHoldings,
     funds: fundPrices,
     plan,
-    date: '2026-05-16',
+    date: '2026-05-16'
   });
 
   assert.equal(drafts.mode, 'smart_fill');
@@ -270,8 +428,8 @@ test('smart buy below threshold follows Excel future-gap proportional fill', () 
     plan.items.map((item) => [item.assetClassId, item.amount]),
     [
       ['equity', 70],
-      ['bond', 30],
-    ],
+      ['bond', 30]
+    ]
   );
 });
 
@@ -283,31 +441,62 @@ test('smart sell below threshold follows Excel future-gap proportional trim', ()
     plan.items.map((item) => [item.assetClassId, item.amount]),
     [
       ['equity', 70],
-      ['bond', 30],
-    ],
+      ['bond', 30]
+    ]
   );
 });
 
 test('smart cash plan uses proportional mode when Excel threshold is zero', () => {
   const balancedHoldings = [
-    { id: 'h_balanced_equity', portfolioId, assetClassId: 'equity', instrumentType: 'cash', fundName: 'Equity', manualValue: 250 },
-    { id: 'h_balanced_bond', portfolioId, assetClassId: 'bond', instrumentType: 'cash', fundName: 'Bond', manualValue: 250 },
-    { id: 'h_balanced_gold', portfolioId, assetClassId: 'gold', instrumentType: 'cash', fundName: 'Gold', manualValue: 250 },
-    { id: 'h_balanced_cash', portfolioId, assetClassId: 'cash', instrumentType: 'cash', fundName: 'Cash', manualValue: 250 },
+    {
+      id: 'h_balanced_equity',
+      portfolioId,
+      assetClassId: 'equity',
+      instrumentType: 'cash',
+      fundName: 'Equity',
+      manualValue: 250
+    },
+    {
+      id: 'h_balanced_bond',
+      portfolioId,
+      assetClassId: 'bond',
+      instrumentType: 'cash',
+      fundName: 'Bond',
+      manualValue: 250
+    },
+    {
+      id: 'h_balanced_gold',
+      portfolioId,
+      assetClassId: 'gold',
+      instrumentType: 'cash',
+      fundName: 'Gold',
+      manualValue: 250
+    },
+    {
+      id: 'h_balanced_cash',
+      portfolioId,
+      assetClassId: 'cash',
+      instrumentType: 'cash',
+      fundName: 'Cash',
+      manualValue: 250
+    }
   ].map(normalizePortfolioHolding);
 
   const plan = calculateSmartCashPlan(excelPortfolio, balancedHoldings, 100);
 
   assert.equal(plan.thresholdAmount, 0);
   assert.equal(plan.mode, 'proportional');
-  assert.deepEqual(plan.items.map((item) => item.amount), [25, 25, 25, 25]);
+  assert.deepEqual(
+    plan.items.map((item) => item.amount),
+    [25, 25, 25, 25]
+  );
 });
 
 test('trade price does not use cost price as same-day valuation', () => {
   const priceInfo = resolveHoldingTradePrice({
     instrumentType: 'fund',
     costPrice: 39098.399915,
-    share: 0.127882,
+    share: 0.127882
   });
 
   assert.equal(priceInfo.price, 0);
@@ -321,11 +510,14 @@ test('smart buy above threshold allocates proportionally across target assets', 
     holdings: smartTradeHoldings,
     funds: fundPrices,
     plan,
-    date: '2026-05-16',
+    date: '2026-05-16'
   });
 
   assert.equal(drafts.mode, 'proportional');
-  assert.deepEqual(drafts.rows.map((row) => row.holdingId), ['h_smart_equity', 'h_smart_bond']);
+  assert.deepEqual(
+    drafts.rows.map((row) => row.holdingId),
+    ['h_smart_equity', 'h_smart_bond']
+  );
   nearly(drafts.rows[0].amount, 125);
   nearly(drafts.rows[0].share, 100);
   nearly(drafts.rows[1].amount, 125);
@@ -341,7 +533,7 @@ test('smart sell below threshold trims overweight asset and blocks oversell', ()
     holdings: smartTradeHoldings,
     funds: fundPrices,
     plan: trimPlan,
-    date: '2026-05-16',
+    date: '2026-05-16'
   });
 
   assert.equal(trimDrafts.mode, 'smart_trim');
@@ -358,7 +550,7 @@ test('smart sell below threshold trims overweight asset and blocks oversell', ()
     holdings: smartTradeHoldings,
     funds: fundPrices,
     plan: oversellPlan,
-    date: '2026-05-16',
+    date: '2026-05-16'
   });
 
   assert.ok(oversellDrafts.blockingWarnings.some((warning) => warning.code === 'sell_amount_exceeds_available_value'));
