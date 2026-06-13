@@ -5098,9 +5098,11 @@ html::-webkit-scrollbar-thumb:active,
   --portfolio-hint-bg: color-mix(in srgb, var(--accent) 10%, var(--card));
   --portfolio-good: var(--success);
   --portfolio-bad: var(--danger);
+  --portfolio-warn: #f59e0b;
+  --portfolio-alert: #f97316;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -5113,7 +5115,7 @@ html::-webkit-scrollbar-thumb:active,
 }
 
 .portfolio-workspace .glass {
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 .portfolio-empty {
@@ -5136,7 +5138,7 @@ html::-webkit-scrollbar-thumb:active,
 }
 
 .portfolio-toolbar h2 {
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1.2;
 }
 
@@ -5148,6 +5150,80 @@ html::-webkit-scrollbar-thumb:active,
   color: var(--muted);
   font-size: 13px;
   line-height: 1.55;
+}
+
+.portfolio-state-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 12px;
+  align-items: end;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--success) 30%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--success) 10%, var(--portfolio-soft-bg));
+}
+
+.portfolio-state-card.is-attention {
+  border-color: color-mix(in srgb, var(--portfolio-alert) 36%, var(--border));
+  background: color-mix(in srgb, var(--portfolio-alert) 10%, var(--portfolio-soft-bg));
+}
+
+.portfolio-state-card span {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.portfolio-state-card strong {
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.portfolio-state-card em {
+  grid-column: 1 / -1;
+  font-style: normal;
+}
+
+.portfolio-side-drift,
+.portfolio-settings-summary {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  margin-top: 12px;
+  padding: 12px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+}
+
+.portfolio-side-drift {
+  --asset-drift-color: var(--primary);
+}
+
+.portfolio-side-drift.is-caution {
+  --asset-drift-color: var(--portfolio-warn);
+}
+
+.portfolio-side-drift.is-warning {
+  --asset-drift-color: var(--portfolio-alert);
+}
+
+.portfolio-side-drift.is-danger {
+  --asset-drift-color: #ef4444;
+}
+
+.portfolio-side-drift strong,
+.portfolio-settings-summary strong {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.portfolio-side-drift em {
+  color: var(--asset-drift-color);
+  font-style: normal;
+  font-size: 13px;
 }
 
 .portfolio-empty p {
@@ -5162,7 +5238,7 @@ html::-webkit-scrollbar-thumb:active,
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 18px;
+  padding: 2px 0 0;
   min-width: 0;
 }
 
@@ -5180,10 +5256,53 @@ html::-webkit-scrollbar-thumb:active,
 }
 
 .portfolio-toolbar-actions .select {
-  width: min(320px, 100%);
+  width: min(280px, 100%);
 }
 
-.portfolio-metrics,
+.portfolio-toolbar-more {
+  width: 38px;
+  padding-inline: 0;
+  border-color: color-mix(in srgb, var(--border) 78%, transparent);
+  background: var(--portfolio-soft-bg);
+  color: var(--muted);
+}
+
+.portfolio-hero-metrics {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 2fr);
+  gap: 14px;
+  align-items: stretch;
+  padding: 18px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 13%, var(--card)), var(--portfolio-panel-bg));
+}
+
+.portfolio-total-asset {
+  min-width: 0;
+  padding-right: 14px;
+  border-right: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+.portfolio-total-asset span,
+.portfolio-settings-summary span,
+.portfolio-state-card em,
+.portfolio-side-drift span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.portfolio-total-asset strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--text);
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.05;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.portfolio-secondary-metrics,
 .portfolio-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -5193,7 +5312,7 @@ html::-webkit-scrollbar-thumb:active,
 
 .portfolio-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
   gap: 20px;
   align-items: start;
   min-width: 0;
@@ -5239,9 +5358,9 @@ html::-webkit-scrollbar-thumb:active,
 
 .portfolio-metric {
   min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 8px;
   background: var(--portfolio-soft-bg);
 }
 
@@ -5288,17 +5407,17 @@ html::-webkit-scrollbar-thumb:active,
 }
 
 .portfolio-asset-bars {
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .portfolio-asset-row {
   --asset-drift-color: var(--primary);
   display: grid;
-  grid-template-columns: minmax(100px, 0.9fr) minmax(260px, 2fr);
+  grid-template-columns: minmax(120px, 0.75fr) minmax(300px, 2.25fr);
   align-items: start;
-  gap: 4px 14px;
+  gap: 6px 18px;
   min-width: 0;
-  padding: 8px 0;
+  padding: 14px 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   color: var(--text);
 }
@@ -5308,11 +5427,11 @@ html::-webkit-scrollbar-thumb:active,
 }
 
 .portfolio-asset-row.is-caution {
-  --asset-drift-color: #f59e0b;
+  --asset-drift-color: var(--portfolio-warn);
 }
 
 .portfolio-asset-row.is-warning {
-  --asset-drift-color: #f97316;
+  --asset-drift-color: var(--portfolio-alert);
 }
 
 .portfolio-asset-row.is-danger {
@@ -5338,7 +5457,7 @@ html::-webkit-scrollbar-thumb:active,
 
 .portfolio-asset-head em {
   width: fit-content;
-  padding: 2px 7px;
+  padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--asset-drift-color) 40%, transparent);
   background: color-mix(in srgb, var(--asset-drift-color) 12%, transparent);
@@ -5369,9 +5488,9 @@ html::-webkit-scrollbar-thumb:active,
 .portfolio-asset-track {
   position: relative;
   grid-column: 2;
-  height: 16px;
+  height: 22px;
   min-width: 0;
-  margin-top: 3px;
+  margin-top: 5px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--muted) 18%, transparent);
   overflow: visible;
@@ -5379,8 +5498,8 @@ html::-webkit-scrollbar-thumb:active,
 
 .portfolio-asset-range {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
+  top: 5px;
+  bottom: 5px;
   border-radius: inherit;
   background: color-mix(in srgb, var(--asset-drift-color) 24%, transparent);
 }
@@ -5399,8 +5518,8 @@ html::-webkit-scrollbar-thumb:active,
 .portfolio-asset-current {
   position: absolute;
   top: 50%;
-  width: 13px;
-  height: 13px;
+  width: 16px;
+  height: 16px;
   border: 3px solid var(--portfolio-panel-bg);
   border-radius: 999px;
   background: var(--asset-drift-color);
@@ -5497,7 +5616,7 @@ html::-webkit-scrollbar-thumb:active,
   gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--portfolio-soft-bg);
 }
 
@@ -5761,7 +5880,8 @@ html::-webkit-scrollbar-thumb:active,
   --portfolio-detail-panel-bg: color-mix(in srgb, var(--card) 92%, transparent);
   --portfolio-detail-soft-bg: color-mix(in srgb, var(--secondary) 72%, transparent);
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
   width: 100%;
   max-width: 100%;
@@ -5844,18 +5964,19 @@ html::-webkit-scrollbar-thumb:active,
 
 .portfolio-detail-validation {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
   gap: 12px;
   align-items: stretch;
+  width: auto;
   min-width: 0;
 }
 
 .portfolio-detail-allocation,
 .portfolio-detail-errors {
   min-width: 0;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--portfolio-detail-panel-bg);
 }
 
@@ -5888,7 +6009,7 @@ html::-webkit-scrollbar-thumb:active,
 }
 
 .portfolio-detail-allocation.is-ok strong {
-  color: var(--success);
+  color: var(--muted);
 }
 
 .portfolio-detail-allocation.is-warning {
@@ -6032,6 +6153,17 @@ html::-webkit-scrollbar-thumb:active,
 }
 
 @media (max-width: 1024px) {
+  .portfolio-hero-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolio-total-asset {
+    padding-right: 0;
+    padding-bottom: 14px;
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  }
+
   .portfolio-layout {
     grid-template-columns: 1fr;
   }
@@ -6076,7 +6208,15 @@ html::-webkit-scrollbar-thumb:active,
     min-width: 0;
   }
 
-  .portfolio-metrics,
+  .portfolio-toolbar-actions .portfolio-toolbar-more {
+    grid-column: 2;
+    justify-self: end;
+    width: 44px;
+    min-width: 44px;
+    padding-inline: 0;
+  }
+
+  .portfolio-secondary-metrics,
   .portfolio-summary-grid,
   .portfolio-side {
     grid-template-columns: 1fr;
@@ -6119,6 +6259,11 @@ html::-webkit-scrollbar-thumb:active,
   .portfolio-detail-tab-scroll {
     margin-right: -16px;
     padding-right: 16px;
+  }
+
+  .portfolio-detail-tabs {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .portfolio-detail-validation {

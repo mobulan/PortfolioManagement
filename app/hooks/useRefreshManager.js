@@ -213,7 +213,7 @@ export function useRefreshManager({ scheduleDcaTrades, processPendingQueue, devi
           try {
             data = await fetchFundData(c);
           } catch (e) {
-            console.error(`刷新基金 ${c} 失败`, e);
+            console.warn(`刷新基金 ${c} 失败：${e?.message || e}`);
             if (fundCodeStillInStorage(c)) {
               try {
                 const arr = storageStore.getItem('funds', []);

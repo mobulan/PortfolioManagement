@@ -1592,6 +1592,18 @@ export const fetchFundHoldings = async (code) => {
   });
 };
 
+const scheduleJsonpCallbackCleanup = (callbackName) => {
+  if (typeof window === 'undefined' || !callbackName) return;
+  window[callbackName] = () => {};
+  setTimeout(() => {
+    try {
+      delete window[callbackName];
+    } catch {
+      window[callbackName] = undefined;
+    }
+  }, 30000);
+};
+
 export const searchFunds = async (val) => {
   const normalized = String(val || '').trim();
   if (!normalized) return [];
@@ -1616,7 +1628,7 @@ export const searchFunds = async (val) => {
           const timer = setTimeout(() => {
             if (done) return;
             cleanup();
-            delete window[callbackName];
+            scheduleJsonpCallbackCleanup(callbackName);
             reject(new Error('搜索请求超时'));
           }, 10000);
 
@@ -1642,7 +1654,7 @@ export const searchFunds = async (val) => {
           script.onerror = () => {
             if (done) return;
             cleanup();
-            delete window[callbackName];
+            scheduleJsonpCallbackCleanup(callbackName);
             reject(new Error('搜索请求失败'));
           };
           document.body.appendChild(script);

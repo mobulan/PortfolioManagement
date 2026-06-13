@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Info, Plus, Save, Trash2, WalletCards } from 'lucide-react';
+import { MoreHorizontal, Plus, Save, Settings2, Trash2, WalletCards } from 'lucide-react';
 import {
   ASSET_CLASSES,
   buildPortfolioHoldingFromDraft,
@@ -126,6 +126,7 @@ export default function PortfolioWorkspace({
   const [cashflowAmount, setCashflowAmount] = useState('');
   const [importText, setImportText] = useState('');
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
+  const [settingsEditorOpen, setSettingsEditorOpen] = useState(false);
   const [importAnalysis, setImportAnalysis] = useState(null);
   const [csvText, setCsvText] = useState('');
   const [csvAnalysis, setCsvAnalysis] = useState(null);
@@ -216,11 +217,41 @@ export default function PortfolioWorkspace({
     { id: 'overview', label: '总览' },
     { id: 'holdings', label: '持仓', count: selectedHoldings.length },
     { id: 'transactions', label: '交易', count: portfolioTransactions.filter((tx) => tx.portfolioId === selectedPortfolio?.id).length },
-    { id: 'rebalance', label: '再平衡' },
-    { id: 'smartTrade', label: '智能买卖' },
-    { id: 'history', label: '历史', count: selectedSnapshots.length },
-    { id: 'backtest', label: '回测' },
-  ]), [portfolioTransactions, selectedHoldings.length, selectedPortfolio?.id, selectedSnapshots.length]);
+    { id: 'analysis', label: '分析' },
+  ]), [portfolioTransactions, selectedHoldings.length, selectedPortfolio?.id]);
+  const portfolioTypeLabel = selectedPortfolio?.type === 'permanent'
+    ? '永久组合'
+    : selectedPortfolio?.type === 'all_weather'
+      ? '全天候模板'
+      : '自定义组合';
+  const targetAssetCount = selectedPortfolio?.targetAllocations?.length || 0;
+  const totalReturnRate = dashboard.totalPrincipal > 0 ? dashboard.totalProfit / dashboard.totalPrincipal : 0;
+  const assetDrifts = useMemo(
+    () => (selectedSummary?.assetClasses || []).map((row) => createAssetDriftDisplay(row)),
+    [selectedSummary],
+  );
+  const rebalanceActions = useMemo(
+    () => (rebalancePlan?.items || []).filter((item) => item.action === 'buy' || item.action === 'sell'),
+    [rebalancePlan],
+  );
+  const mostImportantDrift = assetDrifts.reduce((current, row) => (
+    Math.abs(row.drift) > Math.abs(current?.drift || 0) ? row : current
+  ), null);
+  const hasAllocationWarning = Math.abs(allocationTotal - 1) > 0.0001;
+  const portfolioStateTitle = hasAllocationWarning
+    ? '目标比例未完成'
+    : rebalanceActions.length
+      ? '需要关注'
+      : selectedHoldings.length
+        ? '当前无需再平衡'
+        : '当前组合暂无持仓';
+  const portfolioStateDescription = hasAllocationWarning
+    ? `当前目标比例合计为 ${pct(allocationTotal)}，请调整至 100%。`
+    : rebalanceActions.length
+      ? '部分资产已偏离目标区间，请查看调整建议。'
+      : selectedHoldings.length
+        ? '所有资产均处于目标区间内。'
+        : '添加持仓后，可查看资产偏离和再平衡建议。';
   const legacyMigrationPreview = useMemo(
     () => previewLegacyHoldingsMigration({
       funds,
@@ -638,11 +669,12 @@ export default function PortfolioWorkspace({
 
   return (
     <section className="portfolio-workspace">
-      <div className="portfolio-toolbar glass">
+      <div className="portfolio-toolbar">
         <div>
-          <span className="muted">组合管理</span>
-          <h2>投资组合</h2>
-          <p>先设定目标比例，再录入持仓和交易，系统会按偏离度给出再平衡建议。</p>
+          <h2>{selectedPortfolio?.name || '我的基金组合'}</h2>
+          <p>
+            {portfolioTypeLabel} · {targetAssetCount} 类资产 · 目标比例 {pct(allocationTotal)}
+          </p>
         </div>
         <div className="portfolio-toolbar-actions">
           <select className="select" value={selectedPortfolio?.id || ''} onChange={(e) => setSelectedPortfolioId(e.target.value)}>
@@ -650,27 +682,38 @@ export default function PortfolioWorkspace({
               <option key={portfolio.id} value={portfolio.id}>{portfolio.name}</option>
             ))}
           </select>
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() => deletePortfolio(selectedPortfolio?.id)}
-            disabled={!selectedPortfolio}
-          >
-            <Trash2 size={16} />
-            删除
-          </button>
           <button type="button" className="button secondary" onClick={() => addPortfolio('custom')}>
             <Plus size={16} />
             新建
           </button>
+          <button type="button" className="button secondary" onClick={() => setSettingsEditorOpen((open) => !open)}>
+            <Settings2 size={16} />
+            编辑设置
+          </button>
+          <button
+            type="button"
+            className="button ghost portfolio-toolbar-more"
+            onClick={() => deletePortfolio(selectedPortfolio?.id)}
+            disabled={!selectedPortfolio}
+            aria-label="删除组合"
+            title="删除组合"
+          >
+            <MoreHorizontal size={17} />
+          </button>
         </div>
       </div>
 
-      <div className="portfolio-metrics">
-        <Metric label="总资产" value={`¥${money(dashboard.totalValue)}`} />
-        <Metric label="总本金" value={`¥${money(dashboard.totalPrincipal)}`} />
-        <Metric label="总收益" value={`¥${money(dashboard.totalProfit)}`} tone={dashboard.totalProfit >= 0 ? 'up' : 'down'} />
-        <Metric label="今日预估" value={`¥${money(dashboard.dailyEstimatedProfit)}`} tone={dashboard.dailyEstimatedProfit >= 0 ? 'up' : 'down'} />
+      <div className="portfolio-hero-metrics glass">
+        <div className="portfolio-total-asset">
+          <span>总资产</span>
+          <strong>¥{money(dashboard.totalValue)}</strong>
+        </div>
+        <div className="portfolio-secondary-metrics">
+          <Metric label="总收益" value={`¥${money(dashboard.totalProfit)}`} tone={dashboard.totalProfit >= 0 ? 'up' : 'down'} compact />
+          <Metric label="总收益率" value={pct(totalReturnRate)} tone={totalReturnRate >= 0 ? 'up' : 'down'} compact />
+          <Metric label="今日预估" value={`¥${money(dashboard.dailyEstimatedProfit)}`} tone={dashboard.dailyEstimatedProfit >= 0 ? 'up' : 'down'} compact />
+          <Metric label="总本金" value={`¥${money(dashboard.totalPrincipal)}`} compact />
+        </div>
       </div>
 
       <PortfolioDetailTabs
@@ -680,14 +723,6 @@ export default function PortfolioWorkspace({
         allocationTotal={allocationTotal}
         errors={validationErrors}
       />
-
-      <div className="portfolio-help-strip" role="note">
-        <Info size={16} aria-hidden="true" />
-        <span>
-          当前组合：<strong>{selectedPortfolio?.name || '未选择'}</strong>。
-          {selectedHoldings.length > 0 ? '可在“再平衡”查看买入/卖出建议。' : '建议先在“持仓”中添加资产，概览和偏离度才会有实际数据。'}
-        </span>
-      </div>
 
       <div className={`portfolio-layout ${activeDetailTab === 'holdings' ? 'is-holdings' : ''}`}>
         <div className="portfolio-main">
@@ -702,21 +737,20 @@ export default function PortfolioWorkspace({
               </div>
             )}
             <div className="portfolio-asset-bars">
-              {(selectedSummary?.assetClasses || []).length > 0 ? (selectedSummary?.assetClasses || []).map((row) => {
-                const drift = createAssetDriftDisplay(row);
+              {assetDrifts.length > 0 ? assetDrifts.map((drift) => {
                 return (
-                <div key={row.assetClassId} className={`portfolio-asset-row is-${drift.tone}`}>
+                <div key={drift.assetClassId} className={`portfolio-asset-row is-${drift.tone}`}>
                   <div className="portfolio-asset-head">
-                    <strong>{row.assetClassName}</strong>
+                    <strong>{drift.assetClassName}</strong>
                     <em>{drift.statusText}</em>
                   </div>
                   <div className="portfolio-asset-meta">
-                    <span>当前 {pct(row.currentRatio)}</span>
-                    <span>目标 {pct(row.targetRatio)}</span>
+                    <span>当前 {pct(drift.currentRatio)}</span>
+                    <span>目标 {pct(drift.targetRatio)}</span>
                     <span>区间 {pct(drift.lowerRatio)}-{pct(drift.upperRatio)}</span>
                     <strong>{drift.driftText}</strong>
                   </div>
-                  <div className="portfolio-asset-track" aria-label={`${row.assetClassName} 当前 ${pct(row.currentRatio)} 目标 ${pct(row.targetRatio)}`}>
+                  <div className="portfolio-asset-track" aria-label={`${drift.assetClassName} 当前 ${pct(drift.currentRatio)} 目标 ${pct(drift.targetRatio)}`}>
                     <div
                       className="portfolio-asset-range"
                       style={{
@@ -836,80 +870,74 @@ export default function PortfolioWorkspace({
             />
           )}
 
-          {activeDetailTab === 'rebalance' && (
-          <Panel title="再平衡">
-            <div className="portfolio-rebalance-list">
-              {(rebalancePlan?.items || []).length ? (rebalancePlan?.items || []).map((item) => (
-                <div key={item.assetClassId} className={`portfolio-rebalance-item is-${item.action}`}>
-                  <span>{item.assetClassName}</span>
-                  <strong>{item.action === 'buy' ? '买入' : item.action === 'sell' ? '卖出' : '保持'}</strong>
-                  <em>¥{money(Math.abs(item.rebalanceAmount))}</em>
-                </div>
-              )) : (
-                <EmptyHint
-                  title="暂无再平衡建议"
-                  description="设置目标比例并录入持仓后，系统会计算每类资产需要买入、卖出或保持。"
-                />
-              )}
-            </div>
-            <div className="portfolio-inline-form">
-              <input className="input" value={cashflowAmount} onChange={(e) => setCashflowAmount(e.target.value)} placeholder="新增/取出资金" />
-              <span className="muted">
-                {smartCashPlan?.mode || 'smart_fill'}：
-                {(smartCashPlan?.items || []).map((item) => `${item.assetClassName} ¥${money(item.amount)}`).join('；') || '输入金额查看建议'}
-              </span>
-            </div>
-            <div className="portfolio-table-wrap">
-              <table className="portfolio-table">
-                <thead>
-                  <tr>
-                    <th>执行动作</th>
-                    <th>资产</th>
-                    <th>金额</th>
-                    <th>份额</th>
-                    <th>价格</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rebalanceTransactionDrafts.length ? rebalanceTransactionDrafts.map((draft) => (
-                    <tr key={draft.id}>
-                      <td>{draft.type}</td>
-                      <td>{draft.assetClassId}</td>
-                      <td>¥{money(draft.amount)}</td>
-                      <td>{money(draft.share)}</td>
-                      <td>{money(draft.price)}</td>
-                    </tr>
-                  )) : (
+          {activeDetailTab === 'analysis' && (
+            <>
+            <Panel title="再平衡详情">
+              <div className="portfolio-rebalance-list">
+                {(rebalancePlan?.items || []).length ? (rebalancePlan?.items || []).map((item) => (
+                  <div key={item.assetClassId} className={`portfolio-rebalance-item is-${item.action}`}>
+                    <span>{item.assetClassName}</span>
+                    <strong>{item.action === 'buy' ? '买入' : item.action === 'sell' ? '卖出' : '保持'}</strong>
+                    <em>¥{money(Math.abs(item.rebalanceAmount))}</em>
+                  </div>
+                )) : (
+                  <EmptyHint
+                    title="暂无再平衡建议"
+                    description="设置目标比例并录入持仓后，系统会计算每类资产需要买入、卖出或保持。"
+                  />
+                )}
+              </div>
+              <div className="portfolio-inline-form">
+                <input className="input" value={cashflowAmount} onChange={(e) => setCashflowAmount(e.target.value)} placeholder="新增/取出资金" />
+                <span className="muted">
+                  {smartCashPlan?.mode || 'smart_fill'}：
+                  {(smartCashPlan?.items || []).map((item) => `${item.assetClassName} ¥${money(item.amount)}`).join('；') || '输入金额查看建议'}
+                </span>
+              </div>
+              <div className="portfolio-table-wrap">
+                <table className="portfolio-table">
+                  <thead>
                     <tr>
-                      <td colSpan={5}>暂无可执行草案。需要存在对应资产类别的持仓。</td>
+                      <th>执行动作</th>
+                      <th>资产</th>
+                      <th>金额</th>
+                      <th>份额</th>
+                      <th>价格</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <button
-              type="button"
-              className="button"
-              onClick={() => applyTransactionDrafts(rebalanceTransactionDrafts)}
-              disabled={!rebalanceTransactionDrafts.length}
-            >
-              <Save size={16} />
-              应用再平衡草案
-            </button>
-          </Panel>
-          )}
-
-          {activeDetailTab === 'smartTrade' && (
+                  </thead>
+                  <tbody>
+                    {rebalanceTransactionDrafts.length ? rebalanceTransactionDrafts.map((draft) => (
+                      <tr key={draft.id}>
+                        <td>{draft.type}</td>
+                        <td>{draft.assetClassId}</td>
+                        <td>¥{money(draft.amount)}</td>
+                        <td>{money(draft.share)}</td>
+                        <td>{money(draft.price)}</td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan={5}>暂无可执行草案。需要存在对应资产类别的持仓。</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <button
+                type="button"
+                className="button"
+                onClick={() => applyTransactionDrafts(rebalanceTransactionDrafts)}
+                disabled={!rebalanceTransactionDrafts.length}
+              >
+                <Save size={16} />
+                应用再平衡草案
+              </button>
+            </Panel>
             <PortfolioSmartTradePanel
               portfolio={selectedPortfolio}
               holdings={portfolioHoldings}
               funds={funds}
               onApplyDrafts={applyTransactionDrafts}
             />
-          )}
-
-          {activeDetailTab === 'history' && (
-            <>
             <PortfolioHistoryImportPanel
               snapshots={selectedSnapshots}
               importText={importText}
@@ -924,26 +952,79 @@ export default function PortfolioWorkspace({
               snapshotAutoEnabled={automaticSnapshotEnabled}
               onSnapshotAutoEnabledChange={setAutomaticSnapshotEnabled}
             />
-            </>
-          )}
-
-          {activeDetailTab === 'backtest' && (
             <PortfolioBacktestPanel
               portfolioId={selectedPortfolio?.id}
               portfolioBacktests={portfolioBacktests}
               setPortfolioBacktests={setPortfolioBacktests}
             />
+            </>
           )}
         </div>
 
         <aside className="portfolio-side">
           {activeDetailTab === 'overview' && (
-            <PortfolioEditorPanel
-              portfolio={selectedPortfolio}
-              onSavePortfolio={savePortfolio}
-              onDeletePortfolio={deletePortfolio}
-              onCreatePortfolio={createPortfolioFromEditor}
-            />
+            <>
+            <Panel title="组合状态">
+              <div className={`portfolio-state-card ${rebalanceActions.length || hasAllocationWarning ? 'is-attention' : 'is-ok'}`}>
+                <span>{portfolioStateTitle}</span>
+                <strong>{selectedSummary ? pct(selectedSummary.theta) : pct(0)}</strong>
+                <em>目标偏离度</em>
+              </div>
+              <p className="portfolio-panel-intro">{portfolioStateDescription}</p>
+              {mostImportantDrift && (
+                <div className={`portfolio-side-drift is-${mostImportantDrift.tone}`}>
+                  <span>最大偏离</span>
+                  <strong>{mostImportantDrift.assetClassName}</strong>
+                  <em>{mostImportantDrift.driftText}</em>
+                </div>
+              )}
+            </Panel>
+
+            <Panel title="再平衡建议">
+              <div className="portfolio-rebalance-list">
+                {rebalanceActions.length ? rebalanceActions.slice(0, 4).map((item) => (
+                  <div key={item.assetClassId} className={`portfolio-rebalance-item is-${item.action}`}>
+                    <span>{item.assetClassName}</span>
+                    <strong>{item.action === 'buy' ? '建议买入' : '建议卖出'}</strong>
+                    <em>¥{money(Math.abs(item.rebalanceAmount))}</em>
+                  </div>
+                )) : (
+                  <EmptyHint
+                    title={selectedHoldings.length ? '当前无需再平衡' : '暂无需要调整的资产'}
+                    description={selectedHoldings.length ? '所有资产均处于目标区间内。' : '添加持仓后，可生成买入或卖出建议。'}
+                  />
+                )}
+              </div>
+              <button type="button" className="button secondary" onClick={() => setActiveDetailTab('analysis')}>
+                查看详细建议
+              </button>
+            </Panel>
+
+            <Panel title="组合设置">
+              <div className={`portfolio-detail-allocation ${hasAllocationWarning ? 'is-warning' : 'is-ok'}`}>
+                <span>目标比例合计</span>
+                <strong>{pct(allocationTotal)}</strong>
+                {hasAllocationWarning && <em>请调整至 100%</em>}
+              </div>
+              <div className="portfolio-settings-summary">
+                <span>当前模板</span>
+                <strong>{portfolioTypeLabel}</strong>
+              </div>
+              <button type="button" className="button secondary" onClick={() => setSettingsEditorOpen((open) => !open)}>
+                <Settings2 size={16} />
+                {settingsEditorOpen ? '收起设置' : '编辑组合设置'}
+              </button>
+            </Panel>
+
+            {settingsEditorOpen && (
+              <PortfolioEditorPanel
+                portfolio={selectedPortfolio}
+                onSavePortfolio={savePortfolio}
+                onDeletePortfolio={deletePortfolio}
+                onCreatePortfolio={createPortfolioFromEditor}
+              />
+            )}
+            </>
           )}
 
           {activeDetailTab === 'holdings' && (
@@ -1049,7 +1130,7 @@ export default function PortfolioWorkspace({
           </Panel>
           )}
 
-          {activeDetailTab === 'history' && (
+          {activeDetailTab === 'analysis' && (
             <Panel title="导出备份">
               <div className="portfolio-form">
                 <button type="button" className="button secondary" onClick={exportJson}>生成 JSON</button>
