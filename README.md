@@ -1,9 +1,26 @@
 # 实时基金估值 (Real-time Fund Valuation)
 
 一个基于 Next.js 开发的基金估值与重仓股实时追踪工具。采用玻璃拟态设计（Glassmorphism），支持移动端适配。
-预览地址：  
-1. [https://hzm0321.github.io/real-time-fund/](https://hzm0321.github.io/real-time-fund/)
-2. [https://fund.cc.cd/](https://fund.cc.cd/) （加速国内访问）
+预览地址：
+
+1. [https://fund.cc.cd/](https://fund.cc.cd/) （推荐，加速国内访问）
+2. [https://hzm0321.github.io/real-time-fund/](https://hzm0321.github.io/real-time-fund/)
+
+## 📸 界面预览
+
+### PC 端界面
+
+<img src="./doc/pc-demo-01.png" width="600" alt="PC 端主界面">
+
+---
+
+<img src="./doc/pc-demo-02.png" width="600" alt="PC 端交易与设置">
+
+---
+
+### 移动端界面
+
+<img src="./doc/mobile-demo-01.png" width="300" alt="移动端适配界面">
 
 ## Star History
 
@@ -49,12 +66,14 @@
 ### 本地开发
 
 1. 克隆仓库：
+
    ```bash
    git clone https://github.com/hzm0321/real-time-fund.git
    cd real-time-fund
    ```
 
 2. 安装依赖：
+
    ```bash
    npm install
    ```
@@ -64,12 +83,13 @@
    cp env.example .env.local
    ```
    按照 `env.example` 填入以下值：
-  - `NEXT_PUBLIC_Supabase_URL`：Supabase 项目 URL
-  - `NEXT_PUBLIC_Supabase_ANON_KEY`：Supabase 匿名公钥
-  - `NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY`：Web3Forms Access Key
-  - `NEXT_PUBLIC_GA_ID`：Google Analytics Measurement ID（如 `G-xxxx`）
-  - `NEXT_PUBLIC_GITHUB_LATEST_RELEASE_URL`：GitHub 最新 Release 接口地址，用于在页面中展示"发现新版本"提示（如：`https://api.github.com/repos/hzm0321/real-time-fund/releases/latest`）
-  - `NEXT_PUBLIC_IS_GITHUB_LOGIN`：控制是否开启 GitHub OAuth 登录功能，可选值 `true` / `false`（默认 `false`）
+
+- `NEXT_PUBLIC_Supabase_URL`：Supabase 项目 URL
+- `NEXT_PUBLIC_Supabase_ANON_KEY`：Supabase 匿名公钥
+- `NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY`：Web3Forms Access Key
+- `NEXT_PUBLIC_GA_ID`：Google Analytics Measurement ID（如 `G-xxxx`）
+- `NEXT_PUBLIC_GITHUB_LATEST_RELEASE_URL`：GitHub 最新 Release 接口地址，用于在页面中展示"发现新版本"提示（如：`https://api.github.com/repos/hzm0321/real-time-fund/releases/latest`）
+- `NEXT_PUBLIC_IS_GITHUB_LOGIN`：控制是否开启 GitHub OAuth 登录功能，可选值 `true` / `false`（默认 `false`）
 
 注：如不使用登录、反馈或 GA 统计功能，可不设置对应变量
 
@@ -80,12 +100,14 @@
    访问 [http://localhost:3000](http://localhost:3000) 查看效果。
 
 ### Supabase 配置说明
+
 1. NEXT_PUBLIC_Supabase_URL 和 NEXT_PUBLIC_Supabase_ANON_KEY 获取
 
    NEXT_PUBLIC_Supabase_URL：Supabase控制台 → Project Settings → General → Project ID  
    NEXT_PUBLIC_Supabase_ANON_KEY： Supabase控制台 → Project Settings → API Keys → Publishable key
 
    示例：
+
    ```
    NEXT_PUBLIC_SUPABASE_URL=https://abcdefghijklmnop.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=xxxxxx
@@ -93,21 +115,21 @@
 
 2. 邮件数量修改
 
-    Supabase 免费项目自带每小时2条邮件服务。如果觉得额度不够，可以改成自己的邮箱SMTP。修改路径在 Supabase控制台 → Authentication → Email → SMTP Settings。  
-    之后可在 Rate Limits ，自由修改每小时邮件数量。
+   Supabase 免费项目自带每小时2条邮件服务。如果觉得额度不够，可以改成自己的邮箱SMTP。修改路径在 Supabase控制台 → Authentication → Email → SMTP Settings。  
+   之后可在 Rate Limits ，自由修改每小时邮件数量。
 
-3. 修改接收到的邮件为验证码  
+3. 修改接收到的邮件为验证码
 
-    在 Supabase控制台 → Authentication → Email Templates 中，选择 **Magic Link** 模板进行编辑，在邮件正文中使用变量 `{{ .Token }}` 展示验证码。  
+   在 Supabase控制台 → Authentication → Email Templates 中，选择 **Magic Link** 模板进行编辑，在邮件正文中使用变量 `{{ .Token }}` 展示验证码。
 
-4. 修改验证码位数  
+4. 修改验证码位数
 
-    官方验证码位数默认为8位，可自行修改。常见一般为6位。
-   在 Supabase控制台 → Authentication → Sign In / Providers → Auth Providers → email → Minimum password length  和 Email OTP Length 都改为6位。
+   官方验证码位数默认为8位，可自行修改。常见一般为6位。
+   在 Supabase控制台 → Authentication → Sign In / Providers → Auth Providers → email → Minimum password length 和 Email OTP Length 都改为6位。
 
 5. 关闭确认邮件
 
-    在 Supabase控制台 → Authentication → Sign In / Providers → Auth Providers → email 中，关闭 **Confirm email** 选项。这样用户注册后就不需要再去邮箱点击确认链接了，直接使用验证码登录即可。
+   在 Supabase控制台 → Authentication → Sign In / Providers → Auth Providers → email 中，关闭 **Confirm email** 选项。这样用户注册后就不需要再去邮箱点击确认链接了，直接使用验证码登录即可。
 
 6. 配置 GitHub 登录（可选）
 
@@ -172,19 +194,26 @@
 
 9. 部署 Supabase Edge Function（可选）
 
-   本项目 OCR 识别基金截图功能依赖第三方模型接口，已封装为 Supabase Edge Function 以隐藏 API Key 并避免跨域问题。大模型服务赞助商为 [AINX](https://api.ainx.cc/)。
+   本项目提供了以下两个云端函数（Edge Function），用于隐藏 API Key 并避免浏览器跨域请求限制：
+   - **`analyze-fund`**：用于 OCR 识别基金截图并提取基金代码。依赖第三方模型接口，大模型服务赞助商为 [AINX](https://api.ainx.cc/)。
+   - **`fund-valuation-ranking`**：作为天天基金估值排行 API 的代理，解决跨域访问限制问题。
 
    **配置步骤：**
    - 需要用户已登录（函数会读取请求头 `Authorization`，并通过 `supabase.auth.getUser()` 校验 JWT）
    - 进入 **Supabase 控制台** → 选择你的项目
    - 左侧菜单找到 **Project Settings**（项目设置）
    - 点击 **Edge Functions** 选项卡
-   - 在 **Functions** 区域点击 **Develop a new function** → **Via Editor**
-   - 输入函数名称 `analyze-fund`和复制 `doc/edgeFunction/analyze-fund.ts` 内容到编辑器中，点击 **Create**
-   - 到该函数的 Settings 页，取消 **Verify JWT with legacy secret** 选项
-   - 在 **Secrets** 区域点击 **Add a new secret**
-   - Name 填入 `AINX_API_KEY`，Value 填入你从 [AINX 控制台](https://console.ainx.cc/token) 申请的 Key
-   - 点击 **保存** 即可
+   - **部署 `analyze-fund` 函数（v2版本新增）：**
+     - 在 **Functions** 区域点击 **Develop a new function** → **Via Editor**
+     - 输入函数名称 `analyze-fund`和复制 `doc/edgeFunction/analyze-fund.ts` 内容到编辑器中，点击 **Create**
+     - 到该函数的 Settings 页，取消 **Verify JWT with legacy secret** 选项
+     - 在 **Secrets** 区域点击 **Add a new secret**
+     - Name 填入 `AINX_API_KEY`，Value 填入你从 [AINX 控制台](https://console.ainx.cc/token) 申请的 Key
+     - 点击 **保存** 即可
+   - **部署 `fund-valuation-ranking` 函数：**
+     - 返回 **Edge Functions** 选项卡，在 **Functions** 区域点击 **Develop a new function** → **Via Editor**
+     - 输入函数名称 `fund-valuation-ranking`和复制 `doc/edgeFunction/fund-valuation-ranking.ts` 内容到编辑器中，点击 **Create**
+     - 到该函数的 Settings 页，取消 **Verify JWT with legacy secret** 选项
 
    **常见排查：**
    - 401 Unauthorized：说明当前未登录或未携带用户 JWT（先完成 Supabase 登录流程）
@@ -199,9 +228,11 @@
 包括：`NEXT_PUBLIC_Supabase_URL`、`NEXT_PUBLIC_Supabase_ANON_KEY`、`NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY`、`NEXT_PUBLIC_GA_ID`、`NEXT_PUBLIC_GITHUB_LATEST_RELEASE_URL`、`NEXT_PUBLIC_IS_GITHUB_LOGIN`。
 
 若要手动构建：
+
 ```bash
 npm run build
 ```
+
 静态文件将生成在 `out` 目录下。
 
 ### Docker运行
@@ -214,6 +245,7 @@ npm run build
 可复制 `env.example` 为 `.env` 并填入实际值；若不用登录/反馈功能可留空。
 
 1. 构建镜像
+
 ```bash
 # 方式 A：运行时再注入配置（镜像内为占位符）
 docker build -t real-time-fund .
@@ -224,12 +256,14 @@ docker build -t real-time-fund --build-arg NEXT_PUBLIC_SUPABASE_URL=xxx --build-
 ```
 
 2. 启动容器
+
 ```bash
 # 若构建时未写入配置，可在此注入（与 --env-file .env 二选一）
 docker run -d -p 3000:3000 --name fund --env-file .env real-time-fund
 ```
 
 #### docker-compose（会读取同目录 `.env` 作为 build-arg 与运行环境）
+
 ```bash
 # 建议先：cp env.example .env 并编辑 .env
 docker compose up -d
@@ -240,12 +274,14 @@ docker compose up -d
 镜像已发布至 Docker Hub，可直接拉取运行，无需本地构建。
 
 1. **拉取镜像**
+
    ```bash
    docker pull hzm0321/real-time-fund:latest
    ```
 
 2. **启动容器**  
    访问 [http://localhost:3000](http://localhost:3000) 即可使用。
+
    ```bash
    docker run -d -p 3000:3000 --name real-time-fund --restart always hzm0321/real-time-fund:latest
    ```
@@ -283,8 +319,20 @@ docker compose up -d
 - **要求**：基于本项目衍生或修改的作品需以相同协议开源，并保留版权声明与协议全文。
 - **无担保**：软件按「原样」提供，不提供任何明示或暗示的担保。
 
-完整协议文本见仓库根目录 [LICENSE](./LICENSE) 文件，或 [GNU AGPL v3 官方说明](https://www.gnu.org/licenses/agpl-3.0.html)。  
+完整协议文本见仓库根目录 [LICENSE](./LICENSE) 文件，或 [GNU AGPL v3 官方说明](https://www.gnu.org/licenses/agpl-3.0.html)。
+
+## 🎁 友情推荐：FreeModel AI - 免费好用的 AI 模型 API 服务
+
+在开发或使用本项目时，如果你需要稳定、高速的大模型 API（如大模型 OCR 识别或其它 AI 功能），极力推荐体验 **[FreeModel AI](https://freemodel.dev/invite/FRE-a22f65d4)**：
+
+- **超大免费额度**：新账户注册直接赠送 **$300 免费 API 额度**，无需绑定信用卡或支付信息。
+- **一站式模型调用**：通过一个统一的 API 端点，即可接入包括 FRE 核心系列（如 FRE-5.4、FRE-5.5 等）在内的多种主流大语言模型。
+- **完美兼容 OpenAI**：完全兼容 OpenAI 接口规范，无需重构代码，可接入 codex ，只需替换 `base_url` 与 `api_key` 即可直接平替、无缝使用。
+- **开发者友好**：低延迟、高可用性，特别适合独立开发者和团队进行项目开发与原型验证。
+
+👉 **[立即点击注册，领取 $300 免费额度](https://freemodel.dev/invite/FRE-a22f65d4)**
 
 ---
+
 二开或转载需注明出处。  
 Made by [hzm](https://github.com/hzm0321)

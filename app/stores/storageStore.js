@@ -1,25 +1,25 @@
 import { create } from 'zustand';
-import { isEqual } from 'lodash';
+import { isArray, isBoolean, isEqual, isFunction, isObject, isString } from 'lodash';
 import { getFundCodesFromTagRecord } from '@/app/lib/fundHelpers';
+import { DEFAULT_SORT_RULES, SORT_DISPLAY_MODES } from '@/app/constants';
 
 /**
  * 签名函数：用于检测 funds 列表是否发生实质性变更（jzrq, dwjz 等核心字段）
  */
 export const getFundCodesSignature = (value, extraFields = []) => {
   try {
-    const list = Array.isArray(value) ? value : JSON.parse(value || '[]');
-    if (!Array.isArray(list)) return '';
-    const fields = Array.from(new Set([
-      'jzrq',
-      'dwjz',
-      'dataSource',
-      ...(Array.isArray(extraFields) ? extraFields : [])
-    ]));
-    const items = list.map((item) => {
-      if (!item?.code) return null;
-      const extras = fields.map((field) => item?.[field] ?? '').join(':');
-      return `${item.code}:${extras}`;
-    }).filter(Boolean);
+    const list = isArray(value) ? value : JSON.parse(value || '[]');
+    if (!isArray(list)) return '';
+    const fields = Array.from(
+      new Set(['jzrq', 'dwjz', 'dataSource', 'showImageChart', ...(isArray(extraFields) ? extraFields : [])])
+    );
+    const items = list
+      .map((item) => {
+        if (!item?.code) return null;
+        const extras = fields.map((field) => item?.[field] ?? '').join(':');
+        return `${item.code}:${extras}`;
+      })
+      .filter(Boolean);
     return Array.from(new Set(items)).join('|');
   } catch (e) {
     return '';
@@ -31,8 +31,8 @@ export const getFundCodesSignature = (value, extraFields = []) => {
  */
 export const getTagsStoreSignature = (value) => {
   try {
-    const list = Array.isArray(value) ? value : JSON.parse(value || '[]');
-    if (!Array.isArray(list)) return '';
+    const list = isArray(value) ? value : JSON.parse(value || '[]');
+    if (!isArray(list)) return '';
     return list
       .map((r) => {
         const codes = getFundCodesFromTagRecord(r).sort().join(',');
@@ -49,38 +49,34 @@ export const getTagsStoreSignature = (value) => {
  * 仅以下 key 参与云端同步
  */
 const SYNC_KEYS = new Set([
-  'funds', 'tags', 'favorites', 'groups', 
-  'collapsedCodes', 'collapsedTrends', 'collapsedEarnings', 
-  'refreshMs', 'holdings', 'groupHoldings', 'pendingTrades', 
-  'transactions', 'dcaPlans', 'customSettings', 'fundDailyEarnings',
-  'portfolios', 'portfolioHoldings', 'portfolioTransactions',
-  'portfolioPrincipalRecords', 'portfolioSnapshots', 'portfolioBacktests',
-  'portfolioSettings', 'portfolioSchemaVersion'
+  'funds',
+  'tags',
+  'favorites',
+  'groups',
+  'collapsedCodes',
+  'collapsedTrends',
+  'collapsedValuationTrends',
+  'collapsedEarnings',
+  'refreshMs',
+  'holdings',
+  'groupHoldings',
+  'pendingTrades',
+  'transactions',
+  'dcaPlans',
+  'customSettings',
+  'fundDailyEarnings',
+  'fundDividends',
+  'portfolios',
+  'portfolioHoldings',
+  'portfolioTransactions',
+  'portfolioPrincipalRecords',
+  'portfolioSnapshots',
+  'portfolioBacktests',
+  'portfolioSettings',
+  'portfolioSchemaVersion'
 ]);
 
-/** 排序展示模式的合法值集合 */
-export const SORT_DISPLAY_MODES = new Set(['buttons', 'dropdown']);
-
-/** 排序规则的默认配置 */
-export const DEFAULT_SORT_RULES = [
-  { id: 'default', label: '默认', enabled: true },
-  { id: 'yield', label: '估算涨幅', alias: '涨跌幅', enabled: true },
-  { id: 'yesterdayIncrease', label: '最新涨幅', enabled: false },
-  { id: 'holdingAmount', label: '持仓金额', enabled: false },
-  { id: 'todayProfit', label: '当日收益', enabled: false },
-  { id: 'yesterdayProfit', label: '昨日收益', enabled: false },
-  { id: 'holdingDays', label: '持有天数', enabled: false },
-  { id: 'holding', label: '持有收益', enabled: true },
-  { id: 'estimateProfit', label: '估算收益', enabled: false },
-  { id: 'holdingCost', label: '持仓成本', enabled: false },
-  { id: 'last1Week', label: '近1周', enabled: false },
-  { id: 'last1Month', label: '近1月', enabled: false },
-  { id: 'last3Months', label: '近3月', enabled: false },
-  { id: 'last6Months', label: '近6月', enabled: false },
-  { id: 'last1Year', label: '近1年', enabled: false },
-  { id: 'tags', label: '基金标签', enabled: false },
-  { id: 'name', label: '基金名称', alias: '名称', enabled: true },
-];
+export { SORT_DISPLAY_MODES, DEFAULT_SORT_RULES };
 
 /**
  * 管理 localStorage 数据的 Zustand Store
@@ -88,7 +84,7 @@ export const DEFAULT_SORT_RULES = [
 export const useStorageStore = create((set, get) => ({
   // 云端同步回调，由 Page 组件注入
   onSync: null,
-  
+
   /** 注入同步回调 */
   setOnSync: (callback) => set({ onSync: callback }),
 
@@ -97,6 +93,7 @@ export const useStorageStore = create((set, get) => ({
   favorites: new Set(),
   collapsedCodes: new Set(),
   collapsedTrends: new Set(),
+  collapsedValuationTrends: new Set(),
   collapsedEarnings: new Set(),
   refreshMs: 30000,
   holdings: {},
@@ -106,6 +103,10 @@ export const useStorageStore = create((set, get) => ({
   dcaPlans: {},
   customSettings: {},
   fundDailyEarnings: {},
+  fundDividends: {},
+
+  // 估值分时序列（每次调用估值接口记录，用于分时图，不持久化）
+  valuationSeries: {},
   portfolios: [],
   portfolioHoldings: [],
   portfolioTransactions: [],
@@ -124,7 +125,8 @@ export const useStorageStore = create((set, get) => ({
 
   initFunds: () => {
     if (typeof window !== 'undefined') {
-      set({ funds: get().getItem('funds', []) });
+      const saved = get().getItem('funds', []);
+      set({ funds: isArray(saved) ? saved : [] });
     }
   },
 
@@ -137,7 +139,7 @@ export const useStorageStore = create((set, get) => ({
   initFavorites: () => {
     if (typeof window !== 'undefined') {
       const saved = get().getItem('favorites', []);
-      set({ favorites: new Set(Array.isArray(saved) ? saved : []) });
+      set({ favorites: new Set(isArray(saved) ? saved : []) });
     }
   },
 
@@ -187,9 +189,9 @@ export const useStorageStore = create((set, get) => ({
   initFundDailyEarnings: () => {
     if (typeof window !== 'undefined') {
       const parsed = get().getItem('fundDailyEarnings', {});
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      if (parsed && isObject(parsed) && !isArray(parsed)) {
         const values = Object.values(parsed);
-        const hasScoped = values.some((v) => v && typeof v === 'object' && !Array.isArray(v));
+        const hasScoped = values.some((v) => v && isObject(v) && !isArray(v));
         if (!hasScoped && Object.keys(parsed).length > 0) {
           // 迁移旧版扁平格式为 { "all": 原对象 }
           set({ fundDailyEarnings: { all: parsed } });
@@ -197,6 +199,12 @@ export const useStorageStore = create((set, get) => ({
         }
       }
       set({ fundDailyEarnings: parsed });
+    }
+  },
+
+  initFundDividends: () => {
+    if (typeof window !== 'undefined') {
+      set({ fundDividends: get().getItem('fundDividends', {}) });
     }
   },
 
@@ -210,7 +218,7 @@ export const useStorageStore = create((set, get) => ({
         portfolioSnapshots: get().getItem('portfolioSnapshots', []),
         portfolioBacktests: get().getItem('portfolioBacktests', []),
         portfolioSettings: get().getItem('portfolioSettings', {}),
-        portfolioSchemaVersion: Number(get().getItem('portfolioSchemaVersion', 1)) || 1,
+        portfolioSchemaVersion: Number(get().getItem('portfolioSchemaVersion', 1)) || 1
       });
     }
   },
@@ -219,11 +227,13 @@ export const useStorageStore = create((set, get) => ({
     if (typeof window !== 'undefined') {
       const cc = get().getItem('collapsedCodes', []);
       const ct = get().getItem('collapsedTrends', []);
+      const cvt = get().getItem('collapsedValuationTrends', []);
       const ce = get().getItem('collapsedEarnings', []);
       set({
-        collapsedCodes: new Set(Array.isArray(cc) ? cc : []),
-        collapsedTrends: new Set(Array.isArray(ct) ? ct : []),
-        collapsedEarnings: new Set(Array.isArray(ce) ? ce : []),
+        collapsedCodes: new Set(isArray(cc) ? cc : []),
+        collapsedTrends: new Set(isArray(ct) ? ct : []),
+        collapsedValuationTrends: new Set(isArray(cvt) ? cvt : []),
+        collapsedEarnings: new Set(isArray(ce) ? ce : [])
       });
     }
   },
@@ -244,28 +254,31 @@ export const useStorageStore = create((set, get) => ({
     // 从 customSettings 读取排序规则和展示模式
     try {
       const settings = get().getItem('customSettings', {});
-      if (settings && typeof settings === 'object') {
+      if (settings && isObject(settings)) {
         // 展示模式：优先读取按端口分别存储的字段，向后兼容旧版单一字段
-        if (typeof settings.localSortDisplayMode === 'string' && SORT_DISPLAY_MODES.has(settings.localSortDisplayMode)) {
+        if (isString(settings.localSortDisplayMode) && SORT_DISPLAY_MODES.has(settings.localSortDisplayMode)) {
           nextState.pcSortDisplayMode = settings.localSortDisplayMode;
           nextState.mobileSortDisplayMode = settings.localSortDisplayMode;
         } else {
-          if (typeof settings.pcLocalSortDisplayMode === 'string' && SORT_DISPLAY_MODES.has(settings.pcLocalSortDisplayMode)) {
+          if (isString(settings.pcLocalSortDisplayMode) && SORT_DISPLAY_MODES.has(settings.pcLocalSortDisplayMode)) {
             nextState.pcSortDisplayMode = settings.pcLocalSortDisplayMode;
           }
-          if (typeof settings.mobileLocalSortDisplayMode === 'string' && SORT_DISPLAY_MODES.has(settings.mobileLocalSortDisplayMode)) {
+          if (
+            isString(settings.mobileLocalSortDisplayMode) &&
+            SORT_DISPLAY_MODES.has(settings.mobileLocalSortDisplayMode)
+          ) {
             nextState.mobileSortDisplayMode = settings.mobileLocalSortDisplayMode;
           }
         }
 
         // 排序规则：优先从 customSettings.localSortRules 读取，兼容旧版独立 localSortRules 字段
         let rulesFromSettings = null;
-        if (Array.isArray(settings.localSortRules)) {
+        if (isArray(settings.localSortRules)) {
           rulesFromSettings = settings.localSortRules;
         }
         if (!rulesFromSettings) {
           const legacyRules = get().getItem('localSortRules');
-          if (Array.isArray(legacyRules)) rulesFromSettings = legacyRules;
+          if (isArray(legacyRules)) rulesFromSettings = legacyRules;
         }
 
         if (rulesFromSettings && rulesFromSettings.length) {
@@ -276,8 +289,8 @@ export const useStorageStore = create((set, get) => ({
             if (!base) continue;
             merged.push({
               ...base,
-              enabled: typeof stored.enabled === 'boolean' ? stored.enabled : base.enabled,
-              alias: typeof stored.alias === 'string' && stored.alias.trim() ? stored.alias.trim() : base.alias,
+              enabled: isBoolean(stored.enabled) ? stored.enabled : base.enabled,
+              alias: isString(stored.alias) && stored.alias.trim() ? stored.alias.trim() : base.alias
             });
           }
           // 追加新版本新增但本地未记录的规则
@@ -295,37 +308,43 @@ export const useStorageStore = create((set, get) => ({
   },
 
   setFunds: (nextFunds) => {
-    const next = typeof nextFunds === 'function' ? nextFunds(get().funds) : nextFunds;
+    const next = isFunction(nextFunds) ? nextFunds(get().funds) : nextFunds;
     set({ funds: next });
     get().setItem('funds', JSON.stringify(next));
   },
 
   setGroups: (nextGroups) => {
-    const next = typeof nextGroups === 'function' ? nextGroups(get().groups) : nextGroups;
+    const next = isFunction(nextGroups) ? nextGroups(get().groups) : nextGroups;
     set({ groups: next });
     get().setItem('groups', JSON.stringify(next));
   },
 
   setFavorites: (nextFavs) => {
-    const next = typeof nextFavs === 'function' ? nextFavs(get().favorites) : nextFavs;
+    const next = isFunction(nextFavs) ? nextFavs(get().favorites) : nextFavs;
     set({ favorites: next });
     get().setItem('favorites', JSON.stringify(Array.from(next)));
   },
 
   setCollapsedCodes: (nextVal) => {
-    const next = typeof nextVal === 'function' ? nextVal(get().collapsedCodes) : nextVal;
+    const next = isFunction(nextVal) ? nextVal(get().collapsedCodes) : nextVal;
     set({ collapsedCodes: next });
     get().setItem('collapsedCodes', JSON.stringify(Array.from(next)));
   },
 
   setCollapsedTrends: (nextVal) => {
-    const next = typeof nextVal === 'function' ? nextVal(get().collapsedTrends) : nextVal;
+    const next = isFunction(nextVal) ? nextVal(get().collapsedTrends) : nextVal;
     set({ collapsedTrends: next });
     get().setItem('collapsedTrends', JSON.stringify(Array.from(next)));
   },
 
+  setCollapsedValuationTrends: (nextVal) => {
+    const next = isFunction(nextVal) ? nextVal(get().collapsedValuationTrends) : nextVal;
+    set({ collapsedValuationTrends: next });
+    get().setItem('collapsedValuationTrends', JSON.stringify(Array.from(next)));
+  },
+
   setCollapsedEarnings: (nextVal) => {
-    const next = typeof nextVal === 'function' ? nextVal(get().collapsedEarnings) : nextVal;
+    const next = isFunction(nextVal) ? nextVal(get().collapsedEarnings) : nextVal;
     set({ collapsedEarnings: next });
     get().setItem('collapsedEarnings', JSON.stringify(Array.from(next)));
   },
@@ -336,67 +355,67 @@ export const useStorageStore = create((set, get) => ({
   },
 
   setHoldings: (nextHoldings) => {
-    const next = typeof nextHoldings === 'function' ? nextHoldings(get().holdings) : nextHoldings;
+    const next = isFunction(nextHoldings) ? nextHoldings(get().holdings) : nextHoldings;
     set({ holdings: next });
     get().setItem('holdings', JSON.stringify(next));
   },
 
   setGroupHoldings: (nextGroupHoldings) => {
-    const next = typeof nextGroupHoldings === 'function' ? nextGroupHoldings(get().groupHoldings) : nextGroupHoldings;
+    const next = isFunction(nextGroupHoldings) ? nextGroupHoldings(get().groupHoldings) : nextGroupHoldings;
     set({ groupHoldings: next });
     get().setItem('groupHoldings', JSON.stringify(next));
   },
 
   setPendingTrades: (nextPendingTrades) => {
-    const next = typeof nextPendingTrades === 'function' ? nextPendingTrades(get().pendingTrades) : nextPendingTrades;
+    const next = isFunction(nextPendingTrades) ? nextPendingTrades(get().pendingTrades) : nextPendingTrades;
     set({ pendingTrades: next });
     get().setItem('pendingTrades', JSON.stringify(next));
   },
 
   setTransactions: (nextTransactions) => {
-    const next = typeof nextTransactions === 'function' ? nextTransactions(get().transactions) : nextTransactions;
+    const next = isFunction(nextTransactions) ? nextTransactions(get().transactions) : nextTransactions;
     set({ transactions: next });
     get().setItem('transactions', JSON.stringify(next));
   },
 
   setDcaPlans: (nextDcaPlans) => {
-    const next = typeof nextDcaPlans === 'function' ? nextDcaPlans(get().dcaPlans) : nextDcaPlans;
+    const next = isFunction(nextDcaPlans) ? nextDcaPlans(get().dcaPlans) : nextDcaPlans;
     set({ dcaPlans: next });
     get().setItem('dcaPlans', JSON.stringify(next));
   },
 
   setCustomSettings: (nextCustomSettings) => {
-    const next = typeof nextCustomSettings === 'function' ? nextCustomSettings(get().customSettings) : nextCustomSettings;
+    const next = isFunction(nextCustomSettings) ? nextCustomSettings(get().customSettings) : nextCustomSettings;
     set({ customSettings: next });
     get().setItem('customSettings', JSON.stringify(next));
   },
 
   setSortBy: (nextSortBy) => {
-    const val = typeof nextSortBy === 'function' ? nextSortBy(get().sortBy) : nextSortBy;
+    const val = isFunction(nextSortBy) ? nextSortBy(get().sortBy) : nextSortBy;
     set({ sortBy: val });
     get().setItem('localSortBy', val);
   },
 
   setSortOrder: (nextSortOrder) => {
-    const val = typeof nextSortOrder === 'function' ? nextSortOrder(get().sortOrder) : nextSortOrder;
+    const val = isFunction(nextSortOrder) ? nextSortOrder(get().sortOrder) : nextSortOrder;
     set({ sortOrder: val });
     get().setItem('localSortOrder', val);
   },
 
   setPcSortDisplayMode: (nextMode) => {
-    const val = typeof nextMode === 'function' ? nextMode(get().pcSortDisplayMode) : nextMode;
+    const val = isFunction(nextMode) ? nextMode(get().pcSortDisplayMode) : nextMode;
     set({ pcSortDisplayMode: val });
     get()._persistSortSettings({ pcSortDisplayMode: val });
   },
 
   setMobileSortDisplayMode: (nextMode) => {
-    const val = typeof nextMode === 'function' ? nextMode(get().mobileSortDisplayMode) : nextMode;
+    const val = isFunction(nextMode) ? nextMode(get().mobileSortDisplayMode) : nextMode;
     set({ mobileSortDisplayMode: val });
     get()._persistSortSettings({ mobileSortDisplayMode: val });
   },
 
   setSortRules: (nextRules) => {
-    const val = typeof nextRules === 'function' ? nextRules(get().sortRules) : nextRules;
+    const val = isFunction(nextRules) ? nextRules(get().sortRules) : nextRules;
     set({ sortRules: val });
     get()._persistSortSettings({ sortRules: val });
   },
@@ -411,8 +430,10 @@ export const useStorageStore = create((set, get) => ({
       const next = {
         ...current,
         localSortRules: patch.sortRules !== undefined ? patch.sortRules : get().sortRules,
-        pcLocalSortDisplayMode: patch.pcSortDisplayMode !== undefined ? patch.pcSortDisplayMode : get().pcSortDisplayMode,
-        mobileLocalSortDisplayMode: patch.mobileSortDisplayMode !== undefined ? patch.mobileSortDisplayMode : get().mobileSortDisplayMode,
+        pcLocalSortDisplayMode:
+          patch.pcSortDisplayMode !== undefined ? patch.pcSortDisplayMode : get().pcSortDisplayMode,
+        mobileLocalSortDisplayMode:
+          patch.mobileSortDisplayMode !== undefined ? patch.mobileSortDisplayMode : get().mobileSortDisplayMode
       };
       // 删除旧字段兼容历史数据
       delete next.localSortDisplayMode;
@@ -424,9 +445,22 @@ export const useStorageStore = create((set, get) => ({
   },
 
   setFundDailyEarnings: (nextFundDailyEarnings) => {
-    const next = typeof nextFundDailyEarnings === 'function' ? nextFundDailyEarnings(get().fundDailyEarnings) : nextFundDailyEarnings;
+    const next = isFunction(nextFundDailyEarnings)
+      ? nextFundDailyEarnings(get().fundDailyEarnings)
+      : nextFundDailyEarnings;
     set({ fundDailyEarnings: next });
     get().setItem('fundDailyEarnings', JSON.stringify(next));
+  },
+
+  setFundDividends: (nextFundDividends) => {
+    const next = isFunction(nextFundDividends) ? nextFundDividends(get().fundDividends) : nextFundDividends;
+    set({ fundDividends: next });
+    get().setItem('fundDividends', JSON.stringify(next));
+  },
+
+  setValuationSeries: (nextValuationSeries) => {
+    const next = isFunction(nextValuationSeries) ? nextValuationSeries(get().valuationSeries) : nextValuationSeries;
+    set({ valuationSeries: next });
   },
 
   setPortfolios: (nextPortfolios) => {
@@ -436,57 +470,78 @@ export const useStorageStore = create((set, get) => ({
   },
 
   setPortfolioHoldings: (nextPortfolioHoldings) => {
-    const next = typeof nextPortfolioHoldings === 'function' ? nextPortfolioHoldings(get().portfolioHoldings) : nextPortfolioHoldings;
+    const next =
+      typeof nextPortfolioHoldings === 'function'
+        ? nextPortfolioHoldings(get().portfolioHoldings)
+        : nextPortfolioHoldings;
     set({ portfolioHoldings: next });
     get().setItem('portfolioHoldings', JSON.stringify(next));
   },
 
   setPortfolioTransactions: (nextPortfolioTransactions) => {
-    const next = typeof nextPortfolioTransactions === 'function' ? nextPortfolioTransactions(get().portfolioTransactions) : nextPortfolioTransactions;
+    const next =
+      typeof nextPortfolioTransactions === 'function'
+        ? nextPortfolioTransactions(get().portfolioTransactions)
+        : nextPortfolioTransactions;
     set({ portfolioTransactions: next });
     get().setItem('portfolioTransactions', JSON.stringify(next));
   },
 
   setPortfolioPrincipalRecords: (nextPortfolioPrincipalRecords) => {
-    const next = typeof nextPortfolioPrincipalRecords === 'function' ? nextPortfolioPrincipalRecords(get().portfolioPrincipalRecords) : nextPortfolioPrincipalRecords;
+    const next =
+      typeof nextPortfolioPrincipalRecords === 'function'
+        ? nextPortfolioPrincipalRecords(get().portfolioPrincipalRecords)
+        : nextPortfolioPrincipalRecords;
     set({ portfolioPrincipalRecords: next });
     get().setItem('portfolioPrincipalRecords', JSON.stringify(next));
   },
 
   setPortfolioSnapshots: (nextPortfolioSnapshots) => {
-    const next = typeof nextPortfolioSnapshots === 'function' ? nextPortfolioSnapshots(get().portfolioSnapshots) : nextPortfolioSnapshots;
+    const next =
+      typeof nextPortfolioSnapshots === 'function'
+        ? nextPortfolioSnapshots(get().portfolioSnapshots)
+        : nextPortfolioSnapshots;
     set({ portfolioSnapshots: next });
     get().setItem('portfolioSnapshots', JSON.stringify(next));
   },
 
   setPortfolioBacktests: (nextPortfolioBacktests) => {
-    const next = typeof nextPortfolioBacktests === 'function' ? nextPortfolioBacktests(get().portfolioBacktests) : nextPortfolioBacktests;
+    const next =
+      typeof nextPortfolioBacktests === 'function'
+        ? nextPortfolioBacktests(get().portfolioBacktests)
+        : nextPortfolioBacktests;
     set({ portfolioBacktests: next });
     get().setItem('portfolioBacktests', JSON.stringify(next));
   },
 
   setPortfolioSettings: (nextPortfolioSettings) => {
-    const next = typeof nextPortfolioSettings === 'function' ? nextPortfolioSettings(get().portfolioSettings) : nextPortfolioSettings;
+    const next =
+      typeof nextPortfolioSettings === 'function'
+        ? nextPortfolioSettings(get().portfolioSettings)
+        : nextPortfolioSettings;
     set({ portfolioSettings: next });
     get().setItem('portfolioSettings', JSON.stringify(next));
   },
 
   setPortfolioSchemaVersion: (nextPortfolioSchemaVersion) => {
-    const next = Number(typeof nextPortfolioSchemaVersion === 'function'
-      ? nextPortfolioSchemaVersion(get().portfolioSchemaVersion)
-      : nextPortfolioSchemaVersion) || 1;
+    const next =
+      Number(
+        typeof nextPortfolioSchemaVersion === 'function'
+          ? nextPortfolioSchemaVersion(get().portfolioSchemaVersion)
+          : nextPortfolioSchemaVersion
+      ) || 1;
     set({ portfolioSchemaVersion: next });
     get().setItem('portfolioSchemaVersion', JSON.stringify(next));
   },
 
   /**
    * 核心写入方法：同步更新 localStorage 和 Store 状态，并触发同步
-   * @param {string} key 
+   * @param {string} key
    * @param {string} value JSON 字符串或普通字符串
    */
   setItem: (key, value) => {
     const prevValue = typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
-    
+
     // 检查内容是否真的发生了变化 (使用 lodash isEqual 进行深对比)
     if (prevValue !== null) {
       try {
@@ -512,6 +567,7 @@ export const useStorageStore = create((set, get) => ({
       else if (key === 'favorites') set({ favorites: new Set(parsed) });
       else if (key === 'collapsedCodes') set({ collapsedCodes: new Set(parsed) });
       else if (key === 'collapsedTrends') set({ collapsedTrends: new Set(parsed) });
+      else if (key === 'collapsedValuationTrends') set({ collapsedValuationTrends: new Set(parsed) });
       else if (key === 'collapsedEarnings') set({ collapsedEarnings: new Set(parsed) });
       else if (key === 'refreshMs') set({ refreshMs: Number(parsed) });
       else if (key === 'holdings') set({ holdings: parsed });
@@ -521,6 +577,7 @@ export const useStorageStore = create((set, get) => ({
       else if (key === 'dcaPlans') set({ dcaPlans: parsed });
       else if (key === 'customSettings') set({ customSettings: parsed });
       else if (key === 'fundDailyEarnings') set({ fundDailyEarnings: parsed });
+      else if (key === 'fundDividends') set({ fundDividends: parsed });
       else if (key === 'portfolios') set({ portfolios: parsed });
       else if (key === 'portfolioHoldings') set({ portfolioHoldings: parsed });
       else if (key === 'portfolioTransactions') set({ portfolioTransactions: parsed });
@@ -555,7 +612,7 @@ export const useStorageStore = create((set, get) => ({
           return;
         }
       }
-      
+
       onSync(key, prevValue, value);
     }
   },
@@ -564,9 +621,9 @@ export const useStorageStore = create((set, get) => ({
    * 删除 key
    */
   removeItem: (key) => {
-    const prevValue = (key === 'funds' || key === 'tags') ? window.localStorage.getItem(key) : null;
+    const prevValue = key === 'funds' || key === 'tags' ? window.localStorage.getItem(key) : null;
     window.localStorage.removeItem(key);
-    
+
     const { onSync } = get();
     if (onSync && SYNC_KEYS.has(key)) {
       onSync(key, prevValue, null);
@@ -603,5 +660,5 @@ export const storageStore = {
   setItem: (key, val) => useStorageStore.getState().setItem(key, val),
   getItem: (key, def) => useStorageStore.getState().getItem(key, def),
   removeItem: (key) => useStorageStore.getState().removeItem(key),
-  clear: () => useStorageStore.getState().clear(),
+  clear: () => useStorageStore.getState().clear()
 };

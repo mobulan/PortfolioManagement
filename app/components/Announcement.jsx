@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { storageStore } from '../stores';
 
-const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v1.4.1';
+const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v2.2.1';
 
 export default function Announcement() {
   const [isVisible, setIsVisible] = useState(false);
@@ -49,7 +49,7 @@ export default function Announcement() {
             justifyContent: 'center',
             background: 'rgba(0, 0, 0, 0.6)',
             backdropFilter: 'blur(4px)',
-            padding: '20px',
+            padding: '20px'
           }}
         >
           <motion.div
@@ -66,24 +66,54 @@ export default function Announcement() {
               flexDirection: 'column',
               gap: '16px',
               maxHeight: 'calc(100dvh - 40px)',
-              overflow: 'hidden',
+              overflow: 'hidden'
             }}
           >
-            <div className="title" style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 700, fontSize: '18px', color: 'var(--accent)' }}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <div
+              className="title"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                fontWeight: 700,
+                fontSize: '18px',
+                color: 'var(--accent)'
+              }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
                 <line x1="12" y1="9" x2="12" y2="13"></line>
                 <line x1="12" y1="17" x2="12.01" y2="17"></line>
               </svg>
               <span>公告</span>
             </div>
-            <div style={{ color: 'var(--text)', lineHeight: '1.6', fontSize: '15px', overflowY: 'auto', minHeight: 0, flex: 1, paddingRight: '4px' }}>
-              <p>v1.4.1 更新内容如下：</p>
-              <p>1. 新增估值数据源切换。</p>
-              <p>2. 实时估值数据加入云端存储。</p>
-              <p>3. 修复近1周、近1月等排序箭头不显示问题。</p>
+            <div
+              className="scrollbar-y-styled"
+              style={{
+                color: 'var(--text)',
+                lineHeight: '1.6',
+                fontSize: '15px',
+                overflowY: 'auto',
+                minHeight: 0,
+                flex: 1,
+                paddingRight: '4px'
+              }}
+            >
+              <p>v2.2.1 版本更新内容：</p>
+              <p>1. 行情页面分页数量调整为 5 页。</p>
+              <p>2. 盘中支持显示昨日最准及昨日误差（限免）。</p>
+              <p>3. 新增估值走势（限免）。</p>
             </div>
-
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
               <button
                 className="button"

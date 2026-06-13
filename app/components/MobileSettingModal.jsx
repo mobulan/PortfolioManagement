@@ -3,13 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, Reorder, useDragControls } from 'framer-motion';
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerClose,
-} from '@/components/ui/drawer';
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from '@/components/ui/drawer';
 import { Switch } from '@/components/ui/switch';
 import ConfirmModal from './ConfirmModal';
 import SuccessModal from './SuccessModal';
@@ -34,13 +28,7 @@ import { CloseIcon, DragIcon, RefreshIcon, ResetIcon, SettingsIcon } from './Ico
  * @param {(targetIds: string[]) => void} [props.onSyncSettings] - 同步当前设置至目标分组
  * @param {() => void} [props.onSyncSuccess] - 同步成功后的外部提示回调
  */
-function MobileSettingReorderItem({
-  item,
-  index,
-  columnVisibility,
-  onToggleColumnVisibility,
-  setIsReordering,
-}) {
+function MobileSettingReorderItem({ item, index, columnVisibility, onToggleColumnVisibility, setIsReordering }) {
   const dragControls = useDragControls();
 
   return (
@@ -59,7 +47,7 @@ function MobileSettingReorderItem({
         stiffness: 500,
         damping: 35,
         mass: 1,
-        layout: { duration: 0.2 },
+        layout: { duration: 0.2 }
       }}
       style={{ touchAction: 'pan-y' }}
       dragListener={false}
@@ -73,7 +61,7 @@ function MobileSettingReorderItem({
           alignItems: 'center',
           padding: '0 8px',
           color: 'var(--muted)',
-          touchAction: 'none',
+          touchAction: 'none'
         }}
         onPointerDown={(e) => {
           dragControls.start(e);
@@ -89,6 +77,11 @@ function MobileSettingReorderItem({
         {item.id === 'totalChangePercent' && (
           <span className="muted" style={{ fontSize: '12px' }}>
             估值涨幅与持有收益的汇总
+          </span>
+        )}
+        {item.id === 'todayProfit' && (
+          <span className="muted" style={{ fontSize: '12px' }}>
+            下方百分比数字为收益率
           </span>
         )}
         {item.id === 'relatedSector' && (
@@ -124,7 +117,7 @@ export default function MobileSettingModal({
   syncOptions = [],
   currentGroupName = '当前',
   onSyncSettings,
-  onSyncSuccess,
+  onSyncSuccess
 }) {
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
@@ -154,12 +147,7 @@ export default function MobileSettingModal({
         direction="bottom"
         handleOnly={isReordering}
       >
-        <DrawerContent
-          className="glass"
-          defaultHeight="77vh"
-          minHeight="40vh"
-          maxHeight="90vh"
-        >
+        <DrawerContent className="glass" defaultHeight="77vh" minHeight="40vh" maxHeight="90vh">
           <DrawerHeader className="mobile-setting-header flex-row items-center justify-between gap-2 py-5 pt-5 text-base font-semibold">
             <div className="flex min-w-0 items-center gap-2.5">
               <DrawerTitle className="flex items-center gap-2.5 text-left">
@@ -182,7 +170,7 @@ export default function MobileSettingModal({
                     background: 'rgba(255,255,255,0.06)',
                     color: 'var(--primary)',
                     flexShrink: 0,
-                    whiteSpace: 'nowrap',
+                    whiteSpace: 'nowrap'
                   }}
                 >
                   <RefreshIcon width="14" height="14" />
@@ -208,7 +196,7 @@ export default function MobileSettingModal({
                   justifyContent: 'space-between',
                   padding: '12px 0',
                   borderBottom: '1px solid var(--border)',
-                  marginBottom: 16,
+                  marginBottom: 16
                 }}
               >
                 <span style={{ fontSize: '14px' }}>展示完整基金名称</span>
@@ -228,7 +216,7 @@ export default function MobileSettingModal({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 marginBottom: 12,
-                gap: 8,
+                gap: 8
               }}
             >
               <p className="muted" style={{ fontSize: '13px', margin: 0 }}>
@@ -245,7 +233,7 @@ export default function MobileSettingModal({
                     height: '28px',
                     backgroundColor: 'transparent',
                     color: 'var(--muted)',
-                    flexShrink: 0,
+                    flexShrink: 0
                   }}
                 >
                   <ResetIcon width="16" height="16" />
@@ -321,15 +309,17 @@ export default function MobileSettingModal({
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {syncSuccessOpen && typeof document !== 'undefined' && createPortal(
-          <SuccessModal
-            message="同步成功"
-            onClose={() => setSyncSuccessOpen(false)}
-            overlayStyle={{ zIndex: 10004 }}
-            cardStyle={{ maxWidth: '420px', width: '90vw', zIndex: 10005 }}
-          />,
-          document.body,
-        )}
+        {syncSuccessOpen &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <SuccessModal
+              message="同步成功"
+              onClose={() => setSyncSuccessOpen(false)}
+              overlayStyle={{ zIndex: 10004 }}
+              cardStyle={{ maxWidth: '420px', width: '90vw', zIndex: 10005 }}
+            />,
+            document.body
+          )}
       </AnimatePresence>
     </>
   );

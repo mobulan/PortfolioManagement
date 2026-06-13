@@ -88,3 +88,10 @@ fabric.properties
 .cursor/
 .trae/
 .husky/_/
+
+# Sentry Config File
+.env.sentry-build-plugin
+
+# CLI
+cli/
+.agents/

@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, QrCode } from 'lucide-react';
 import { LoginIcon } from './Icons';
 
 export default function MineTab({
@@ -15,14 +15,11 @@ export default function MineTab({
   onUpdateLog,
   onFeedback,
   onSponsorSupport,
+  onOpenWeChat
 }) {
   return (
-    <div
-      className="mine-tab"
-      style={{ display: visible ? undefined : 'none' }}
-      aria-hidden={!visible || undefined}
-    >
-      <section className="mine-profile-card glass" aria-label="个人信息">
+    <div className="mine-tab" style={{ display: visible ? undefined : 'none' }} aria-hidden={!visible || undefined}>
+      <section className="mine-profile-card glass" aria-label="个人信息" style={{ position: 'relative' }}>
         <div className="mine-profile-row">
           <div className="mine-profile-avatar">
             {user ? (
@@ -36,9 +33,7 @@ export default function MineTab({
                   style={{ borderRadius: '50%', objectFit: 'cover' }}
                 />
               ) : (
-                <span className="mine-profile-avatar-fallback">
-                  {user.email?.charAt(0).toUpperCase() || 'U'}
-                </span>
+                <span className="mine-profile-avatar-fallback">{user.email?.charAt(0).toUpperCase() || 'U'}</span>
               )
             ) : (
               <span className="mine-profile-avatar-fallback muted">?</span>
@@ -63,11 +58,7 @@ export default function MineTab({
                 <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
                   数据仅保存在本机
                 </div>
-                <button
-                  type="button"
-                  className="button mine-profile-login-btn"
-                  onClick={onLogin}
-                >
+                <button type="button" className="button mine-profile-login-btn" onClick={onLogin}>
                   <LoginIcon width={16} height={16} />
                   <span>登录</span>
                 </button>
@@ -75,6 +66,23 @@ export default function MineTab({
             )}
           </div>
         </div>
+        <a
+          className="ocr-quota-badge"
+          style={{
+            position: 'absolute',
+            bottom: 12,
+            right: 12,
+            cursor: 'pointer',
+            textDecoration: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4
+          }}
+          onClick={onOpenWeChat}
+        >
+          <QrCode size={14} />
+          加入微信用户支持群
+        </a>
       </section>
 
       <ul className="mine-menu-list" role="list">

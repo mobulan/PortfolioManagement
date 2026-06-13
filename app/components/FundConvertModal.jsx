@@ -3,13 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { CloseIcon } from './Icons';
+import { Info } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DatePicker, NumericInput } from './Common';
 import { fetchSmartFundNetValueBackward } from '../api/fund';
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { formatMoney } from '@/lib/utils';
 
 const format2 = (v) => {
   const n = Number(v);
@@ -24,7 +23,7 @@ export default function FundConvertModal({
   nestedModalOpen = false,
   onClose,
   onPickInFund,
-  onConfirm,
+  onConfirm
 }) {
   const [outAmount, setOutAmount] = useState('');
   const [inAmount, setInAmount] = useState('');
@@ -57,7 +56,7 @@ export default function FundConvertModal({
 
   const maxOut = useMemo(() => {
     const n = Number(maxOutAmount);
-    return Number.isFinite(n) && n > 0 ? n : 0;
+    return Number.isFinite(n) && n > 0 ? Number(n.toFixed(2)) : 0;
   }, [maxOutAmount]);
 
   const outAmt = useMemo(() => Number.parseFloat(outAmount), [outAmount]);
@@ -82,7 +81,7 @@ export default function FundConvertModal({
     if (!open) onClose?.();
   };
 
-  const hintMax = maxOut > 0 ? `最多可转出 ${format2(maxOut)}` : '暂无可转出金额';
+  const hintMax = maxOut > 0 ? `最多可转出 ${formatMoney(maxOut)}` : '暂无可转出金额';
   const refStartDate = useMemo(() => {
     const d = dayjs(confirmDate, 'YYYY-MM-DD', true);
     if (!d.isValid()) return null;
@@ -104,7 +103,7 @@ export default function FundConvertModal({
       try {
         const tasks = [
           fetchSmartFundNetValueBackward(fund.code, refStartDate),
-          inFund?.code ? fetchSmartFundNetValueBackward(inFund.code, refStartDate) : Promise.resolve(null),
+          inFund?.code ? fetchSmartFundNetValueBackward(inFund.code, refStartDate) : Promise.resolve(null)
         ];
         const [outRes, inRes] = await Promise.all(tasks);
         if (outRes && outRes.value) {
@@ -137,7 +136,7 @@ export default function FundConvertModal({
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="glass card modal"
+        className="glass card modal gap-0"
         overlayClassName="modal-overlay"
         onPointerDownOutside={(event) => {
           if (nestedModalOpen || Date.now() < ignoreDialogCloseUntilRef.current) event.preventDefault();
@@ -151,7 +150,7 @@ export default function FundConvertModal({
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-          zIndex: 999,
+          zIndex: 999
         }}
       >
         <DialogTitle className="sr-only">转换</DialogTitle>
@@ -166,12 +165,19 @@ export default function FundConvertModal({
           </button>
         </div>
 
+        <Alert style={{ marginBottom: 16, flexShrink: 0 }} variant="info">
+          <Info className="h-4 w-4" />
+          <AlertDescription>需要基金转换完成后再添加</AlertDescription>
+        </Alert>
+
         <div className="scrollbar-y-styled" style={{ overflowY: 'auto', paddingRight: 4, flex: 1 }}>
           <div style={{ marginBottom: 16 }}>
             <div className="fund-name" style={{ fontWeight: 600, fontSize: '16px', marginBottom: 4 }}>
               {fund?.name}
             </div>
-            <div className="muted" style={{ fontSize: '12px' }}>#{fund?.code}</div>
+            <div className="muted" style={{ fontSize: '12px' }}>
+              #{fund?.code}
+            </div>
           </div>
 
           <div className="form-group" style={{ marginBottom: 16 }}>
@@ -187,7 +193,7 @@ export default function FundConvertModal({
                 background: 'rgba(255,255,255,0.04)',
                 border: '1px solid var(--border)',
                 color: 'var(--text)',
-                opacity: 0.9,
+                opacity: 0.9
               }}
             >
               {fund?.name || '-'}
@@ -198,15 +204,33 @@ export default function FundConvertModal({
             <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
               转出金额 <span style={{ color: 'var(--danger)' }}>*</span>
             </label>
-            <div style={{ border: (!outAmount || !outValid) ? '1px solid var(--danger)' : '1px solid var(--border)', borderRadius: 12 }}>
-              <NumericInput
-                value={outAmount}
-                onChange={setOutAmount}
-                step={100}
-                min={0}
-                placeholder="请输入转出金额"
-              />
+            <div
+              style={{
+                border: !outAmount || !outValid ? '1px solid var(--danger)' : '1px solid var(--border)',
+                borderRadius: 12
+              }}
+            >
+              <NumericInput value={outAmount} onChange={setOutAmount} step={100} min={0} placeholder="请输入转出金额" />
             </div>
+            {maxOut > 0 && (
+              <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                {[
+                  { label: '1/4', value: 0.25 },
+                  { label: '1/3', value: 1 / 3 },
+                  { label: '1/2', value: 0.5 },
+                  { label: '全部', value: 1 }
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    className="trade-amount-btn"
+                    onClick={() => setOutAmount(format2(maxOut * opt.value))}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
               * {hintMax}
             </div>
@@ -220,7 +244,10 @@ export default function FundConvertModal({
               type="button"
               className="button secondary"
               onClick={async () => {
-                const picked = await onPickInFund?.({ excludeCodes: [fund?.code], initialSelectedCode: inFund?.code || '' });
+                const picked = await onPickInFund?.({
+                  excludeCodes: [fund?.code],
+                  initialSelectedCode: inFund?.code || ''
+                });
                 if (picked?.code) setInFund(picked);
               }}
               style={{
@@ -229,13 +256,15 @@ export default function FundConvertModal({
                 background: 'rgba(255,255,255,0.05)',
                 color: 'var(--text)',
                 padding: '10px 12px',
-                borderRadius: 12,
+                borderRadius: 12
               }}
             >
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {inFund?.name ? `${inFund.name} #${inFund.code}` : '点击选择基金（单选）'}
               </span>
-              <span className="muted" style={{ marginLeft: 10 }}>›</span>
+              <span className="muted" style={{ marginLeft: 10 }}>
+                ›
+              </span>
             </button>
           </div>
 
@@ -243,14 +272,13 @@ export default function FundConvertModal({
             <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
               转入金额 <span style={{ color: 'var(--danger)' }}>*</span>
             </label>
-            <div style={{ border: (!inAmount || !inValid) ? '1px solid var(--danger)' : '1px solid var(--border)', borderRadius: 12 }}>
-              <NumericInput
-                value={inAmount}
-                onChange={setInAmount}
-                step={100}
-                min={0}
-                placeholder="请输入转入金额"
-              />
+            <div
+              style={{
+                border: !inAmount || !inValid ? '1px solid var(--danger)' : '1px solid var(--border)',
+                borderRadius: 12
+              }}
+            >
+              <NumericInput value={inAmount} onChange={setInAmount} step={100} min={0} placeholder="请输入转入金额" />
             </div>
           </div>
 
@@ -259,7 +287,11 @@ export default function FundConvertModal({
               确认转换日期
             </label>
             <DatePicker value={confirmDate} onChange={setConfirmDate} />
-            {loadingNetValue && <div className="muted" style={{ fontSize: '12px', marginTop: 4 }}>正在获取净值...</div>}
+            {loadingNetValue && (
+              <div className="muted" style={{ fontSize: '12px', marginTop: 4 }}>
+                正在获取净值...
+              </div>
+            )}
             {!loadingNetValue && outNetValueError && (
               <div style={{ fontSize: '12px', color: 'var(--danger)', marginTop: 4 }}>
                 参考净值(转出): {outNetValueError}
@@ -285,12 +317,7 @@ export default function FundConvertModal({
 
         <div style={{ paddingTop: 12, marginTop: 4 }}>
           <div className="row" style={{ gap: 12 }}>
-            <button
-              type="button"
-              className="button secondary"
-              onClick={onClose}
-              style={{ flex: 1 }}
-            >
+            <button type="button" className="button secondary" onClick={onClose} style={{ flex: 1 }}>
               取消
             </button>
             <button
@@ -306,7 +333,7 @@ export default function FundConvertModal({
                   inFundCode: inFund.code,
                   inFundName: inFund.name,
                   inAmount: inAmt,
-                  date: confirmDate,
+                  date: confirmDate
                 });
               }}
               style={{ flex: 1, opacity: canSubmit ? 1 : 0.6 }}

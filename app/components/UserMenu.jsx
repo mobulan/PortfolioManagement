@@ -8,8 +8,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import ConfirmModal from './ConfirmModal';
 import { HelpCircle } from 'lucide-react';
 import { CalendarIcon, LoginIcon, LogoutIcon, SettingsIcon, UserIcon, ListIcon } from './Icons';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
-export default function UserMenu({user,
+export default function UserMenu({
+  user,
   userAvatar,
   navbarHeight,
   lastSyncTime,
@@ -21,7 +23,8 @@ export default function UserMenu({user,
   onLogout,
   onLogoutConfirmOpenChange,
   onTutorial,
-  onUpdateLog}) {
+  onUpdateLog
+}) {
   const isMobile = useIsMobile();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -50,31 +53,37 @@ export default function UserMenu({user,
   return (
     <>
       <div className="user-menu-container" ref={userMenuRef}>
-        <button
-          className={`icon-button user-menu-trigger ${user ? 'logged-in' : ''}`}
-          aria-label={user ? '用户菜单' : '登录'}
-          onClick={() => setUserMenuOpen(!userMenuOpen)}
-          title={user ? (user.email || '用户') : '用户菜单'}
-        >
-          {user ? (
-            <div className="user-avatar-small">
-              {userAvatar ? (
-                <Image
-                  src={userAvatar}
-                  alt="用户头像"
-                  width={20}
-                  height={20}
-                  unoptimized
-                  style={{ borderRadius: '50%' }}
-                />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className={`icon-button user-menu-trigger ${user ? 'logged-in' : ''}`}
+              aria-label={user ? '用户菜单' : '登录'}
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+            >
+              {user ? (
+                <div className="user-avatar-small">
+                  {userAvatar ? (
+                    <Image
+                      src={userAvatar}
+                      alt="用户头像"
+                      width={20}
+                      height={20}
+                      unoptimized
+                      style={{ borderRadius: '50%' }}
+                    />
+                  ) : (
+                    user.email?.charAt(0).toUpperCase() || 'U'
+                  )}
+                </div>
               ) : (
-                (user.email?.charAt(0).toUpperCase() || 'U')
+                <UserIcon width="18" height="18" />
               )}
-            </div>
-          ) : (
-            <UserIcon width="18" height="18" />
-          )}
-        </button>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{user ? user.email || '用户' : '用户菜单'}</p>
+          </TooltipContent>
+        </Tooltip>
 
         <AnimatePresence>
           {userMenuOpen && (
@@ -100,7 +109,7 @@ export default function UserMenu({user,
                           style={{ borderRadius: '50%' }}
                         />
                       ) : (
-                        (user.email?.charAt(0).toUpperCase() || 'U')
+                        user.email?.charAt(0).toUpperCase() || 'U'
                       )}
                     </div>
                     <div className="user-info">
@@ -116,58 +125,88 @@ export default function UserMenu({user,
                   <div className="user-menu-divider" />
                   {!isMobile && (
                     <>
-                    <button
-                      className="user-menu-item"
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        onOpenPortfolioEarnings?.();
-                      }}
-                    >
-                      <CalendarIcon width="16" height="16" />
-                      <span>我的收益</span>
-                    </button>
-                    <button
-                      className="user-menu-item"
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        onTutorial?.();
-                      }}
-                    >
-                      <HelpCircle width="16" height="16" />
-                      <span>使用帮助</span>
-                    </button>
-                    <button
-                      className="user-menu-item"
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        onUpdateLog?.();
-                      }}
-                    >
-                      <ListIcon width="16" height="16" />
-                      <span>更新日志</span>
-                    </button>
+                      <button
+                        className="user-menu-item"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          onOpenPortfolioEarnings?.();
+                        }}
+                      >
+                        <CalendarIcon width="16" height="16" />
+                        <span>我的收益</span>
+                      </button>
+                      <button
+                        className="user-menu-item"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          onTutorial?.();
+                        }}
+                      >
+                        <HelpCircle width="16" height="16" />
+                        <span>使用帮助</span>
+                      </button>
+                      <button
+                        className="user-menu-item"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          onUpdateLog?.();
+                        }}
+                      >
+                        <ListIcon width="16" height="16" />
+                        <span>更新日志</span>
+                      </button>
                     </>
                   )}
-                  <button
-                    className="user-menu-item"
-                    disabled={isSyncing}
-                    onClick={async () => {
-                      setUserMenuOpen(false);
-                      await onSync?.();
-                    }}
-                    title="手动同步配置到云端"
-                  >
-                    {isSyncing ? (
-                      <span className="loading-spinner" style={{ width: 16, height: 16, border: '2px solid var(--muted)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
-                    ) : (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                        <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" stroke="var(--primary)" />
-                        <path d="M12 12v9" stroke="var(--accent)" />
-                        <path d="m16 16-4-4-4 4" stroke="var(--accent)" />
-                      </svg>
-                    )}
-                    <span>{isSyncing ? '同步中...' : '同步'}</span>
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        className="user-menu-item"
+                        disabled={isSyncing}
+                        onClick={async () => {
+                          setUserMenuOpen(false);
+                          await onSync?.();
+                        }}
+                      >
+                        {isSyncing ? (
+                          <span
+                            className="loading-spinner"
+                            style={{
+                              width: 16,
+                              height: 16,
+                              border: '2px solid var(--muted)',
+                              borderTopColor: 'var(--primary)',
+                              borderRadius: '50%',
+                              animation: 'spin 1s linear infinite',
+                              flexShrink: 0
+                            }}
+                          />
+                        ) : (
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{ flexShrink: 0 }}
+                          >
+                            <path
+                              d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"
+                              stroke="var(--primary)"
+                            />
+                            <path d="M12 12v9" stroke="var(--accent)" />
+                            <path d="m16 16-4-4-4 4" stroke="var(--accent)" />
+                          </svg>
+                        )}
+                        <span>{isSyncing ? '同步中...' : '同步'}</span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>手动同步配置到云端</p>
+                    </TooltipContent>
+                  </Tooltip>
                   <button
                     className="user-menu-item"
                     onClick={() => {
@@ -203,36 +242,36 @@ export default function UserMenu({user,
                   </button>
                   {!isMobile && (
                     <>
-                    <button
-                      className="user-menu-item"
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        onOpenPortfolioEarnings?.();
-                      }}
-                    >
-                      <CalendarIcon width="16" height="16" />
-                      <span>我的收益</span>
-                    </button>
-                    <button
-                      className="user-menu-item"
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        onTutorial?.();
-                      }}
-                    >
-                      <HelpCircle width="16" height="16" />
-                      <span>使用帮助</span>
-                    </button>
-                    <button
-                      className="user-menu-item"
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        onUpdateLog?.();
-                      }}
-                    >
-                      <ListIcon width="16" height="16" />
-                      <span>更新日志</span>
-                    </button>
+                      <button
+                        className="user-menu-item"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          onOpenPortfolioEarnings?.();
+                        }}
+                      >
+                        <CalendarIcon width="16" height="16" />
+                        <span>我的收益</span>
+                      </button>
+                      <button
+                        className="user-menu-item"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          onTutorial?.();
+                        }}
+                      >
+                        <HelpCircle width="16" height="16" />
+                        <span>使用帮助</span>
+                      </button>
+                      <button
+                        className="user-menu-item"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          onUpdateLog?.();
+                        }}
+                      >
+                        <ListIcon width="16" height="16" />
+                        <span>更新日志</span>
+                      </button>
                     </>
                   )}
                   <button
@@ -270,4 +309,3 @@ export default function UserMenu({user,
     </>
   );
 }
-

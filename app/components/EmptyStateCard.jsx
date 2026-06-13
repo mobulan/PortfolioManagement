@@ -1,15 +1,10 @@
 'use client';
 
-const SUMMARY_TAB_ID = '__portfolio_groups_summary__';
+import { SUMMARY_TAB_ID } from '@/app/constants';
 
-export default function EmptyStateCard({
-  fundsLength = 0,
-  currentTab = 'all',
-  onAddToGroup,
-}) {
+export default function EmptyStateCard({ fundsLength = 0, currentTab = 'all', onAddToGroup }) {
   const isEmpty = fundsLength === 0;
-  const isGroupTab =
-    currentTab !== 'all' && currentTab !== 'fav' && currentTab !== SUMMARY_TAB_ID;
+  const isGroupTab = currentTab !== 'all' && currentTab !== 'fav' && currentTab !== SUMMARY_TAB_ID;
 
   return (
     <div
@@ -19,12 +14,12 @@ export default function EmptyStateCard({
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '60px 20px',
+        padding: '60px 20px'
       }}
     >
       <div style={{ fontSize: '48px', marginBottom: 16, opacity: 0.5 }}>📂</div>
       <div className="muted" style={{ marginBottom: 20 }}>
-        {isEmpty ? '尚未添加基金' : '该分组下暂无数据'}
+        {isEmpty ? '尚未添加基金，请从顶部搜索基金名称添加到分组' : '该分组下暂无数据'}
       </div>
       {isGroupTab && fundsLength > 0 && (
         <button className="button" onClick={onAddToGroup}>

@@ -1,11 +1,6 @@
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerClose,
-} from '@/components/ui/drawer';
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from '@/components/ui/drawer';
 import { CloseIcon } from './Icons';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 export default function TutorialDrawer({ open, onOpenChange }) {
   return (
@@ -15,21 +10,26 @@ export default function TutorialDrawer({ open, onOpenChange }) {
           <DrawerTitle className="text-base font-semibold text-[var(--text)]">使用帮助</DrawerTitle>
           <DrawerClose
             className="icon-button border-none bg-transparent p-1"
-            title="关闭"
             style={{ borderColor: 'transparent', backgroundColor: 'transparent' }}
           >
             <CloseIcon width="20" height="20" />
           </DrawerClose>
         </DrawerHeader>
         <div style={{ flex: 1, width: '100%', height: '100%', overflow: 'hidden' }}>
-          <iframe
-            src="https://www.yuque.com/u267605/ookgim/im06q8tembbld6im?singleDoc"
-            style={{ width: '100%', height: '100%', border: 'none' }}
-            title="使用帮助"
-            frameBorder={0}
-            allowFullScreen
-            sandbox="allow-scripts allow-same-origin"
-          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <iframe
+                src="https://www.yuque.com/u267605/ookgim/im06q8tembbld6im?singleDoc"
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                frameBorder={0}
+                allowFullScreen
+                sandbox="allow-scripts allow-same-origin"
+              />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>使用帮助</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </DrawerContent>
     </Drawer>
