@@ -1,10 +1,15 @@
 import { withSentryConfig } from '@sentry/nextjs';
 
+const repositoryName = process.env.GITHUB_REPOSITORY?.split('/')[1] || '';
+const githubPagesBasePath = process.env.GITHUB_ACTIONS === 'true' && repositoryName ? `/${repositoryName}` : '';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   reactCompiler: true,
   output: 'export',
+  basePath: githubPagesBasePath,
+  assetPrefix: githubPagesBasePath,
   images: {
     unoptimized: true
   }
