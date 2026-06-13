@@ -8,6 +8,10 @@ import { QueryClientProviderWrapper } from './providers/query-client-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import packageJson from '../package.json';
 
+const repositoryName = process.env.GITHUB_REPOSITORY?.split('/')[1] || '';
+const publicBasePath = process.env.GITHUB_ACTIONS === 'true' && repositoryName ? `/${repositoryName}` : '';
+const deploySha = process.env.NEXT_PUBLIC_DEPLOY_SHA || '';
+
 const darkReaderHydrationGuardScript = `
 (function(){
   var DARK_READER_ATTR_PREFIX = 'data-darkreader-';
@@ -80,8 +84,8 @@ const darkReaderHydrationGuardScript = `
 `;
 
 export const metadata = {
-  title: `基估宝 V${packageJson.version}`,
-  description: '输入基金编号添加基金，实时显示估值与前10重仓'
+  title: `基估宝 · 投资组合 V${packageJson.version}`,
+  description: '基金实时估值与个人投资组合管理工具'
 };
 
 export default function RootLayout({ children }) {
@@ -93,9 +97,13 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-title" content="基估宝" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <link rel="apple-touch-icon" href="/Icon-60@3x.png?v=1" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/Icon-60@3x.png?v=1" />
-        <link rel="manifest" href="/manifest.webmanifest" />
+        <link rel="apple-touch-icon" href={`${publicBasePath}/Icon-60@3x.png?v=${packageJson.version}`} />
+        <link
+          rel="apple-touch-icon"
+          sizes="180x180"
+          href={`${publicBasePath}/Icon-60@3x.png?v=${packageJson.version}`}
+        />
+        <link rel="manifest" href={`${publicBasePath}/manifest.webmanifest?v=${packageJson.version}`} />
         {/* 初始为暗色；ThemeColorSync 会按 data-theme 同步为亮/暗 */}
         <meta name="theme-color" content="#0f172a" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -114,7 +122,7 @@ export default function RootLayout({ children }) {
       <body>
         <ThemeColorSync />
         <KeepScreenAwake />
-        <PwaRegister />
+        <PwaRegister basePath={publicBasePath} deploySha={deploySha} />
         <AnalyticsGate GA_ID={GA_ID} />
         <QueryClientProviderWrapper>
           <TooltipProvider>{children}</TooltipProvider>

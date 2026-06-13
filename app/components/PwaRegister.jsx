@@ -6,28 +6,45 @@ import { useEffect } from 'react';
  * 在客户端注册 Service Worker，满足 Android Chrome PWA 安装条件（需 HTTPS + manifest + SW）。
  * 仅在生产环境且浏览器支持时注册。
  */
-export default function PwaRegister() {
+export default function PwaRegister({ basePath = '', deploySha = '' }) {
   useEffect(() => {
-    // 检测核心能力
-    const isPwaSupported = 'serviceWorker' in navigator && 'BeforeInstallPromptEvent' in window;
-    console.log('PWA 支持:', isPwaSupported);
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || process.env.NODE_ENV !== 'production') {
       return;
     }
+
+    const normalizedBasePath = basePath.replace(/\/$/, '');
+    const serviceWorkerUrl = `${normalizedBasePath}/sw.js`;
+    const serviceWorkerScope = `${normalizedBasePath || ''}/`;
+    const versionUrl = `${normalizedBasePath}/deploy-version.json?t=${Date.now()}`;
+
     navigator.serviceWorker
-      .register('/sw.js', { scope: '/', updateViaCache: 'none' })
+      .register(serviceWorkerUrl, { scope: serviceWorkerScope, updateViaCache: 'none' })
       .then((reg) => {
+        reg.update();
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           newWorker?.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // 可选：提示用户刷新以获取新版本
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
             }
           });
         });
       })
       .catch(() => {});
-  }, []);
+
+    if (deploySha) {
+      fetch(versionUrl, { cache: 'no-store' })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((version) => {
+          if (!version?.sha || version.sha === deploySha) return;
+          const url = new URL(window.location.href);
+          if (url.searchParams.get('deploy') === version.sha) return;
+          url.searchParams.set('deploy', version.sha);
+          window.location.replace(url.toString());
+        })
+        .catch(() => {});
+    }
+  }, [basePath, deploySha]);
 
   return null;
 }
